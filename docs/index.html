@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101114">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Stremio Remote</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <button id="back" class="icon" hidden aria-label="Voltar">‹</button>
+    <h1 id="title">Stremio Remote</h1>
+    <span id="dot" class="dot" title="Sem conexão"></span>
+  </header>
+
+  <main>
+    <section id="v-search" class="view">
+      <form id="search-form"><input id="q" type="search" placeholder="Buscar filme ou série" autocomplete="off"></form>
+      <div id="results"></div>
+    </section>
+
+    <section id="v-detail" class="view" hidden>
+      <div id="detail"></div>
+    </section>
+
+    <section id="v-control" class="view" hidden>
+      <div class="np">
+        <div id="np-title">Nada tocando</div>
+        <div id="np-time" class="muted"></div>
+        <input id="np-seek" type="range" min="0" max="100" value="0" step="1">
+      </div>
+      <div class="grid">
+        <button data-cmd="seek" data-v="-30">−30s</button>
+        <button data-cmd="seek" data-v="-10">−10s</button>
+        <button data-cmd="pause" class="big" id="btn-pause">⏯</button>
+        <button data-cmd="seek" data-v="10">+10s</button>
+        <button data-cmd="seek" data-v="30">+30s</button>
+        <button data-cmd="volume" data-v="-5">Vol −</button>
+        <button data-cmd="volume" data-v="5">Vol +</button>
+        <button data-cmd="fullscreen">Tela cheia</button>
+        <button data-cmd="subs">Legenda</button>
+        <button data-cmd="audio">Áudio</button>
+      </div>
+      <div class="speeds" id="speeds"></div>
+      <div class="row"><button data-cmd="state">Atualizar</button><button data-cmd="stop">Parar</button></div>
+    </section>
+
+    <section id="v-settings" class="view" hidden>
+      <label>Links dos addons de fontes (AIOStreams etc.), um por linha
+        <textarea id="addons" rows="4" placeholder="https://.../manifest.json"></textarea>
+      </label>
+      <p class="muted">Ficam só neste celular. No AIOStreams, copie o link de instalação (manifest).</p>
+      <button id="save-addons">Salvar</button>
+      <hr>
+      <p id="pair-status" class="muted"></p>
+      <button id="forget">Esquecer o PC</button>
+    </section>
+  </main>
+
+  <nav>
+    <button data-view="v-search" class="on">Buscar</button>
+    <button data-view="v-control">Controle</button>
+    <button data-view="v-settings">Ajustes</button>
+  </nav>
+
+  <div id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
