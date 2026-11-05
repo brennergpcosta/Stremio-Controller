@@ -1,0 +1,68 @@
+name: Build do .exe
+
+# A cada tag vX.Y.Z: compila o programa do PC e anexa o StremioController.exe (e o .sha256) à
+# release dessa versão. A atualização automática do programa baixa daqui.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: pc
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: pc/go.mod
+          cache-dependency-path: pc/go.sum
+
+      - name: Versão
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/v}"; else v="0.0.0-dev"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Ícone e manifesto do .exe
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3
+          go-winres simply --icon assets/icon.ico --manifest gui --product-name "Stremio Controller" --file-description "Stremio Controller" --product-version "${{ steps.ver.outputs.version }}" --file-version "${{ steps.ver.outputs.version }}"
+
+      - name: Compilar
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: |
+          go vet ./...
+          go build -trimpath -ldflags "-H=windowsgui -s -w -X main.version=${{ steps.ver.outputs.version }}" -o ../dist/StremioController.exe .
+          cd ../dist && sha256sum StremioController.exe | cut -d' ' -f1 > StremioController.exe.sha256 && cat StremioController.exe.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StremioController
+          path: dist/
+
+      - name: Anexar à release
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          # A release é criada pelo gh no PC logo depois do push da tag: espera por ela (até 5 min)
+          for i in $(seq 1 30); do gh release view "$tag" >/dev/null 2>&1 && break; sleep 10; done
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            v="${tag#v}"
+            awk -v v="$v" '$0 ~ "^## "v" " {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+            gh release create "$tag" --title "$v" --notes-file notes.md
+          fi
+          gh release upload "$tag" dist/StremioController.exe dist/StremioController.exe.sha256 --clobber

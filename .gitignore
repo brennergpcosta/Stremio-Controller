@@ -1,2 +1,5 @@
 pc/config.json
 pc/pareamento.html
+dist/
+pc/*.syso
+pc/*.exe
