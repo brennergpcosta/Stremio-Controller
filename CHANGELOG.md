@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0 - 2026-11-05
+
+- Programa do PC (`StremioController.exe`): fica perto do relógio, acha o Stremio aberto (perfil A ou B) e se reconecta quando ele é reaberto. Menu com Mostrar QR code, Trocar QR code, Iniciar com o Windows e Sair.
+- Página nova do celular: pareamento pelo QR code, reconexão automática, perfil aberto no topo (ou "Stremio fechado", com botões para abrir o perfil A ou B). Abas Continuar, Biblioteca, Buscar e Controle.
+- Escolha temporada, episódio e fonte (dos addons instalados) no celular e o Stremio do PC toca no player dele. Navegar no celular não muda a tela do PC.
+- Controle: tocar/pausar, ±10 s, barra de tempo, volume e tela cheia, com título e tempo ao vivo. O Continuar assistindo se atualiza sozinho.
+- Conexão direta celular-PC (WebRTC); o pareamento passa pelo ntfy.sh criptografado com a chave do QR code. Os links das fontes ficam no PC.
+- Atualização automática: o programa baixa a versão nova da release do GitHub, confere o .sha256 e reinicia sozinho. A página do celular sempre abre a versão mais nova.
+- O .exe é compilado no GitHub Actions e anexado a cada release.
+- CLAUDE.md: regra de privacidade e sem caminho local.
+
 ## 0.1.0 - 2026-11-05
 
 - Repositório preparado para o controle do Stremio 5: sai o protótipo antigo com mpv, fica a página do celular em `docs/`.
