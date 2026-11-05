@@ -200,7 +200,9 @@ func main() {
 	if _, err := os.Stat(filepath.Join(dataDir(), "iniciado")); err != nil {
 		first = true
 		os.WriteFile(filepath.Join(dataDir(), "iniciado"), []byte(version), 0o600)
-		setAutostart(true)
+		if os.Getenv("STRC_DATA") == "" { // na pasta de teste não mexe no "Iniciar com o Windows"
+			setAutostart(true)
+		}
 	}
 	startSignaling()
 	go watchStremio()
