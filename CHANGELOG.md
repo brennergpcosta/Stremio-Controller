@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 - 2026-11-05
+
+- QR code: a página agora abre por um endereço local (127.0.0.1) em vez de um arquivo, que às vezes dava "ERR_FILE_NOT_FOUND" no navegador.
+
 ## 1.0.0 - 2026-11-05
 
 - Programa do PC (`StremioController.exe`): fica perto do relógio, acha o Stremio aberto (perfil A ou B) e se reconecta quando ele é reaberto. Menu com Mostrar QR code, Trocar QR code, Iniciar com o Windows e Sair.
