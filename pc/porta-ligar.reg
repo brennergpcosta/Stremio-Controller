@@ -1,0 +1,9 @@
+Windows Registry Editor Version 5.00
+
+; Liga a porta de controle (CDP) do WebView2 nos dois Stremio.
+; Perfil A: stremio-shell-ng.exe   -> porta 9222
+; Perfil B: stremio-shell-ng-2.exe -> porta 9223
+; Feche e abra o Stremio de novo depois de aplicar.
+[HKEY_CURRENT_USER\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments]
+"stremio-shell-ng.exe"="--remote-debugging-port=9222"
+"stremio-shell-ng-2.exe"="--remote-debugging-port=9223"

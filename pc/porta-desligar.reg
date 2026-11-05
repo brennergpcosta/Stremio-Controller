@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; Desliga a porta de controle (CDP) do WebView2 nos dois Stremio.
+[HKEY_CURRENT_USER\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments]
+"stremio-shell-ng.exe"=-
+"stremio-shell-ng-2.exe"=-
