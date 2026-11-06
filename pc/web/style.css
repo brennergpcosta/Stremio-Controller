@@ -202,3 +202,19 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius
   width: 100%; margin: 4px 0 6px; font: inherit; font-size: 14px; color: var(--text);
   background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px;
 }
+
+/* Home como o Board do Stremio: seções em carrossel */
+.home-sec { margin-bottom: 18px; }
+.home-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
+.home-head h3 { margin: 0; font-size: 16px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.see-all { flex: none; border: 0; background: none; color: var(--signal-2); font-size: 13.5px; font-weight: 600; padding: 4px 0; }
+.carousel { display: grid; grid-auto-flow: column; grid-auto-columns: 104px; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; padding-bottom: 4px; scrollbar-width: none; margin: 0 -16px; padding-left: 16px; padding-right: 16px; scroll-padding-left: 16px; }
+.carousel::-webkit-scrollbar { display: none; }
+.carousel .card { scroll-snap-align: start; }
+.carousel .empty, .carousel .spinner { grid-column: auto; width: calc(100vw - 32px); padding: 18px 0; margin: 0; }
+.carousel .spinner { width: 28px; margin: 24px auto; }
+/* "Ver tudo" */
+.all-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.all-back { border: 0; background: var(--surface); width: 36px; height: 36px; border-radius: 50%; font-size: 22px; line-height: 1; flex: none; }
+.all-title { font-size: 17px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.all-more { min-height: 40px; display: grid; }

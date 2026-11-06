@@ -91,6 +91,54 @@
     return (lib.catalog || []).map(item);
   };
 
+  // Board do Stremio (as mesmas seções, na mesma ordem): o modelo "board" do core. Se a interface
+  // ainda não carregou (o PC está em outra tela), carrega no core, sem mudar a tela.
+  const metaItem = (m) => ({ type: m.type, id: m.id, name: m.name, poster: m.poster || "", info: m.releaseInfo || "" });
+  const onBoard = () => location.hash === "#/" || location.hash === "" || location.hash.startsWith("#/?");
+  S.board = async () => {
+    let b = await core.getState("board");
+    if (!b.selected && !onBoard()) {
+      core.dispatch({ action: "Load", args: { model: "CatalogsWithExtra", args: { type: null, extra: [] } } }, "board");
+    }
+    // Espera as seções carregarem (até ~8 s); as que não vierem vão vazias
+    for (let i = 0; i < 40; i++) {
+      b = await core.getState("board");
+      const cats = b.catalogs || [];
+      if (b.selected && cats.length && !cats.some((c) => (Array.isArray(c) ? c[0] : c)?.content?.type === "Loading")) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    const list = await addons();
+    const v = i18n();
+    const tr = (k, fb) => (v && v.exists && v.exists(k) ? v.t(k) : fb);
+    return (b.catalogs || []).map((c0) => {
+      const c = Array.isArray(c0) ? c0[0] : c0;
+      if (!c || !c.addon) return null;
+      // O board só traz id e nome do addon: acha o instalado pelo id e pelo catálogo (pode haver dois iguais)
+      const mid = c.addon.manifest && c.addon.manifest.id;
+      let idx = list.findIndex((a) => a.manifest.id === mid && (a.manifest.catalogs || []).some((k) => k.id === c.id && k.type === c.type));
+      if (idx < 0) idx = list.findIndex((a) => a.manifest.id === mid);
+      const catKey = `CATALOG_${String(c.addon.manifest.id).replace(/[^\w]/g, "_")}_${String(c.id).replace(/[^\w]/g, "_")}`;
+      const title = `${tr(catKey, c.name || c.id)} - ${tr(`TYPE_${c.type}`, c.type)}`;
+      const content = c.content || {};
+      return {
+        key: `${idx}|${c.type}|${c.id}`, title,
+        items: content.type === "Ready" ? (content.content || []).map(metaItem) : [],
+        error: content.type === "Err"
+      };
+    }).filter((x) => x && (x.items.length || !x.error));
+  };
+
+  // "Ver tudo" de uma seção: busca a página do catálogo direto no addon (skip = quantos já vieram)
+  S.catalog = async (key, skip) => {
+    const [idxS, type, ...rest] = String(key).split("|");
+    const id = rest.join("|");
+    const a = (await addons())[Number(idxS)];
+    if (!a) throw new Error("addon não encontrado");
+    const url = `${base(a.transportUrl)}/catalog/${type}/${encodeURIComponent(id)}${skip > 0 ? `/skip=${skip}` : ""}.json`;
+    const metas = ((await getJson(url)).metas || []).map(metaItem);
+    return { items: metas, more: metas.length > 0 };
+  };
+
   S.search = async (q) => {
     const list = await addons();
     const cm = cinemeta(list);

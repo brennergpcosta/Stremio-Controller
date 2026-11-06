@@ -181,6 +181,17 @@ func handle(p *peer, c map[string]any) {
 			items = json.RawMessage("[]")
 		}
 		p.send(map[string]any{"t": "list", "which": which, "items": items, "error": errText(err)})
+	case "board":
+		var sections json.RawMessage
+		err := callStremio(20*time.Second, "board", &sections)
+		if sections == nil {
+			sections = json.RawMessage("[]")
+		}
+		p.send(map[string]any{"t": "board", "sections": sections, "error": errText(err)})
+	case "catalog":
+		var res json.RawMessage
+		err := callStremio(20*time.Second, "catalog", &res, str(c, "key"), int(num(c, "skip")))
+		p.send(map[string]any{"t": "catalog", "key": str(c, "key"), "skip": int(num(c, "skip")), "data": res, "error": errText(err)})
 	case "search":
 		q := str(c, "q")
 		if r := []rune(q); len(r) > 100 {

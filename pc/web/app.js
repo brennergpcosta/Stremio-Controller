@@ -306,7 +306,7 @@ let stAt = 0;
 let seeking = false;
 let volDragging = false;
 let volHoldUntil = 0;
-let tab = "cw";
+let tab = "home";
 const loaded = new Set(); // abas já carregadas nesta conexão
 let lastQuery = "";
 
@@ -334,6 +334,8 @@ function onMessage(m) {
       return;
     }
     case "list": onList(m); return;
+    case "board": onBoard(m); return;
+    case "catalog": onCatalog(m); return;
     case "meta": onMeta(m); return;
     case "streams": onStreams(m); return;
     case "toast": toast(m.key ? T(m.key, m.vars) : m.text); return;
@@ -439,12 +441,18 @@ function tickTime() {
 function showTab(name) {
   tab = name;
   for (const b of $("tabs").children) b.classList.toggle("on", b.dataset.tab === name);
-  for (const k of ["cw", "lib", "search", "ctl"]) $(`pane-${k}`).hidden = k !== name;
+  for (const k of ["home", "all", "lib", "search", "ctl"]) $(`pane-${k}`).hidden = k !== name;
   renderPlayer();
   if (!st.stremio || !connected()) return;
-  if ((name === "cw" || name === "lib") && !loaded.has(name)) {
+  if (name === "home" && !loaded.has("home")) {
+    loaded.add("home");
+    if (!$("homeRows").children.length) $("homeRows").replaceChildren(spinner());
+    send({ c: "list", which: "cw" });
+    send({ c: "board" });
+  }
+  if (name === "lib" && !loaded.has(name)) {
     loaded.add(name);
-    if (!$(`grid-${name}`).children.length) $(`grid-${name}`).replaceChildren(spinner());
+    if (!$("grid-lib").children.length) $("grid-lib").replaceChildren(spinner());
     send({ c: "list", which: name });
   }
   if (name === "search" && !lastQuery) setTimeout(() => $("searchInput").focus(), 50);
@@ -453,6 +461,7 @@ $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");
   if (b) showTab(b.dataset.tab);
 });
+$("allBack").addEventListener("click", () => showTab("home"));
 $("mini").addEventListener("click", () => showTab("ctl"));
 
 function spinner() {
@@ -507,6 +516,7 @@ function cardEl(it, i) {
 }
 
 function onList(m) {
+  if (m.which === "cw") { cwItems = m.items || []; cwLoaded = true; renderHome(); if (allView?.kind === "cw") renderAllCw(); return; }
   if (m.which === "search" && m.q !== lastQuery) return;
   const grid = $(`grid-${m.which}`);
   if (!grid) return;
@@ -518,6 +528,103 @@ function onList(m) {
   }
   grid.replaceChildren(...items.map(cardEl));
 }
+
+// ---------------------------------------------------------------------------------------------
+// Home como o Board do Stremio: Continuar assistindo e as seções do board, na mesma ordem, em
+// carrosséis; "Ver tudo" abre a grade completa (com mais páginas ao rolar)
+// ---------------------------------------------------------------------------------------------
+let cwItems = [];
+let cwLoaded = false;
+let boardSections = null; // null: carregando
+let allView = null;       // { kind: "cw" } ou { kind: "catalog", key, skip, done, loading }
+
+function rowSection(title, items, onSeeAll, emptyText) {
+  const sec = document.createElement("section");
+  sec.className = "home-sec";
+  const head = document.createElement("div");
+  head.className = "home-head";
+  const h = document.createElement("h3");
+  h.textContent = title;
+  head.append(h);
+  if (onSeeAll && items.length) {
+    const b = document.createElement("button");
+    b.className = "see-all";
+    b.textContent = cap(T("BUTTON_SEE_ALL")) + " ›";
+    b.addEventListener("click", onSeeAll);
+    head.append(b);
+  }
+  const row = document.createElement("div");
+  row.className = "carousel";
+  if (items.length) row.append(...items.slice(0, 20).map(cardEl));
+  else row.append(emptyText ? emptyEl(emptyText) : spinner());
+  sec.append(head, row);
+  return sec;
+}
+
+function renderHome() {
+  const rows = [];
+  rows.push(rowSection(cap(T("BOARD_CONTINUE_WATCHING")), cwItems, () => openAll({ kind: "cw", title: cap(T("BOARD_CONTINUE_WATCHING")) }),
+    cwLoaded ? T("BOARD_CONTINUE_WATCHING_EMPTY") : ""));
+  if (boardSections === null) rows.push(spinner());
+  else for (const s of boardSections) {
+    rows.push(rowSection(s.title, s.items || [], () => openAll({ kind: "catalog", key: s.key, title: s.title, first: s.items || [] }), T("SEARCH_NO_RESULTS")));
+  }
+  // Guarda a posição de rolagem de cada carrossel
+  const old = [...$("homeRows").querySelectorAll(".carousel")].map((c) => c.scrollLeft);
+  $("homeRows").replaceChildren(...rows);
+  [...$("homeRows").querySelectorAll(".carousel")].forEach((c, i) => { if (old[i]) c.scrollLeft = old[i]; });
+}
+
+function onBoard(m) {
+  boardSections = Array.isArray(m.sections) ? m.sections : [];
+  renderHome();
+}
+
+function openAll(v) {
+  allView = { ...v, skip: 0, done: false, loading: false };
+  $("allTitle").textContent = v.title;
+  $("grid-all").replaceChildren();
+  showTab("all");
+  window.scrollTo({ top: 0 });
+  if (v.kind === "cw") { renderAllCw(); return; }
+  loadMore();
+}
+
+function renderAllCw() {
+  $("grid-all").replaceChildren(...(cwItems.length ? cwItems.map(cardEl) : [emptyEl(T("BOARD_CONTINUE_WATCHING_EMPTY"))]));
+  $("allMore").replaceChildren();
+}
+
+function loadMore() {
+  const v = allView;
+  if (!v || v.kind !== "catalog" || v.done || v.loading) return;
+  v.loading = true;
+  $("allMore").replaceChildren(spinner());
+  send({ c: "catalog", key: v.key, skip: v.skip });
+}
+
+function onCatalog(m) {
+  const v = allView;
+  if (!v || v.kind !== "catalog" || m.key !== v.key || m.skip !== v.skip) return;
+  v.loading = false;
+  const items = m.data?.items || [];
+  if (m.error && !items.length) { v.done = true; $("allMore").replaceChildren(v.skip ? "" : emptyEl(`${T("loadError")}: ${m.error}`)); return; }
+  // Alguns addons devolvem a mesma página de novo: para quando nada novo chega
+  const seen = new Set([...$("grid-all").querySelectorAll(".card")].map((c) => c.dataset.id));
+  const fresh = items.filter((it) => !seen.has(it.id));
+  $("grid-all").append(...fresh.map((it, i) => { const c = cardEl(it, i); c.dataset.id = it.id; return c; }));
+  v.skip += items.length;
+  if (!fresh.length || !m.data?.more) v.done = true;
+  $("allMore").replaceChildren();
+  if (!$("grid-all").children.length) $("grid-all").replaceChildren(emptyEl(T("SEARCH_NO_RESULTS")));
+}
+
+// Mais páginas ao chegar perto do fim da grade
+const moreObs = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) loadMore(); }, { rootMargin: "600px" });
+moreObs.observe($("allMore"));
+window.addEventListener("scroll", () => {
+  if (tab === "all" && window.innerHeight + window.scrollY > document.body.scrollHeight - 800) loadMore();
+}, { passive: true });
 
 // Busca enquanto digita: espera uma pausa curta na digitação; Enter busca na hora
 let searchTimer = 0;
@@ -833,7 +940,7 @@ function start() {
   secret = readKey();
   if (!secret) { $("pairView").hidden = false; setConn("off", "notPaired"); return; }
   setFill(vol);
-  showTab("cw");
+  showTab("home");
   render();
   requestAnimationFrame(frame);
   connect();
