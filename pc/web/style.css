@@ -196,3 +196,9 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius
 .tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 4px; padding: 1px 6px; }
 .tag.watched { background: #f5c518; color: #1a1400; }
 .tag.upcoming { background: #2fbf71; color: #04210f; }
+
+/* Filtro de fontes por addon */
+.addon-filter {
+  width: 100%; margin: 4px 0 6px; font: inherit; font-size: 14px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px;
+}

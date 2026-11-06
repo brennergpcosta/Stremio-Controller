@@ -691,33 +691,49 @@ function renderEpisodes() {
 
 let streamGroups = new Map(); // addon → itens
 let streamsPending = 0;
+let streamHead = [];     // voltar + título, fixos no topo das fontes
+let streamFilter = "all"; // addon escolhido no filtro (como o seletor de addons do Stremio)
 function askStreams(videoId, label) {
   streamsFor = videoId;
   streamGroups = new Map();
   streamsPending = 1;
-  const body = [];
+  streamFilter = "all";
+  streamHead = [];
   if (detail.meta && detail.type !== "movie") {
-    const back = rowEl({ title: "‹ " + cap(T("BACK")), onTap: () => { streamsFor = ""; renderEpisodes(); } });
-    body.push(back);
+    streamHead.push(rowEl({ title: "‹ " + cap(T("BACK")), onTap: () => { streamsFor = ""; renderEpisodes(); } }));
   }
   const h = document.createElement("div");
   h.className = "group-title";
   h.textContent = label;
-  body.push(h, spinner());
-  $("sheetBody").replaceChildren(...body);
+  streamHead.push(h);
+  $("sheetBody").replaceChildren(...streamHead, spinner());
   send({ c: "streams", type: detail.type, id: detail.id, videoId });
 }
 
 function onStreams(m) {
   if (!detail || m.videoId !== streamsFor) return;
-  if (m.addon) streamGroups.set(m.key ?? m.addon, { name: m.addon, items: m.items || [] });
+  if (m.addon) streamGroups.set(String(m.key ?? m.addon), { name: m.addon, items: m.items || [] });
   streamsPending = m.pending || 0;
-  const body = [...$("sheetBody").children].slice(0, detail.meta && detail.type !== "movie" ? 2 : 1);
-  let total = 0;
-  const groups = [...streamGroups.entries()].sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0)).map((e) => e[1]);
-  for (const { name: addon, items } of groups) {
-    if (!items.length) continue;
-    total += items.length;
+  renderStreams();
+}
+
+function renderStreams() {
+  const groups = [...streamGroups.entries()].sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0)).filter((e) => e[1].items.length);
+  const body = [...streamHead];
+  const total = groups.reduce((n, e) => n + e[1].items.length, 0);
+  if (groups.length > 1) {
+    // Filtro por addon: Todos ou um addon
+    const sel = document.createElement("select");
+    sel.className = "addon-filter";
+    const opt = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
+    sel.append(opt("all", `${cap(T("ALL_ADDONS"))} (${total})`), ...groups.map(([k, g]) => opt(k, `${g.name} (${g.items.length})`)));
+    if (streamFilter !== "all" && !streamGroups.has(streamFilter)) streamFilter = "all";
+    sel.value = streamFilter;
+    sel.addEventListener("change", () => { streamFilter = sel.value; renderStreams(); });
+    body.push(sel);
+  }
+  for (const [k, { name: addon, items }] of groups) {
+    if (streamFilter !== "all" && k !== streamFilter) continue;
     const h = document.createElement("div");
     h.className = "group-title";
     h.textContent = `${addon} · ${items.length}`;
