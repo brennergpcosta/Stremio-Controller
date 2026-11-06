@@ -427,14 +427,25 @@ function onList(m) {
   grid.replaceChildren(...items.map(cardEl));
 }
 
-$("searchForm").addEventListener("submit", (e) => {
-  e.preventDefault();
+// Busca enquanto digita: espera uma pausa curta na digitação; Enter busca na hora
+let searchTimer = 0;
+function runSearch() {
+  clearTimeout(searchTimer);
   const q = $("searchInput").value.trim();
-  if (!q) return;
+  if (q === lastQuery) return;
   lastQuery = q;
-  $("searchInput").blur();
+  if (q.length < 2) { $("grid-search").replaceChildren(); return; }
   $("grid-search").replaceChildren(spinner());
   send({ c: "search", q });
+}
+$("searchInput").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 450);
+});
+$("searchForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  $("searchInput").blur();
+  runSearch();
 });
 
 // ---------------------------------------------------------------------------------------------
