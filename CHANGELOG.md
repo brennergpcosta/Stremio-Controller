@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 - 2026-11-06
+
+- Velocidade no celular igual à do player do Stremio: valor atual, slider de 0,1x a 4x e os atalhos 0,5x, 1x, 1,25x, 1,5x, 1,75x, 2x e 4x.
+
 ## 1.2.0 - 2026-11-06
 
 - Board no celular igual ao do Stremio: as mesmas seções, na mesma ordem, em carrosséis, com "Ver tudo" (lista completa, carrega mais ao rolar).
