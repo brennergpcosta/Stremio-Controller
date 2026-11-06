@@ -1,9 +1,9 @@
 # Stremio-Controller
 
-Controle remoto do Stremio pelo celular. O Stremio aberto no PC (versão 5, `stremio-shell-ng`) é comandado pela porta de controle do WebView2 (Chrome DevTools Protocol). O celular usa uma página (PWA) no GitHub Pages.
+Controle remoto do Stremio pelo celular. O Stremio aberto no PC (versão 5, `stremio-shell-ng`) é comandado pela porta de controle do WebView2 (Chrome DevTools Protocol). O programa do PC serve a página do celular na rede de casa.
 
-- `docs/`: página do celular (publicada pelo GitHub Pages).
-- `pc/`: programa do Windows que fica em segundo plano e conversa com o Stremio aberto.
+- `pc/`: programa do Windows que fica em segundo plano e conversa com o Stremio aberto. A página do celular fica em `pc/web/` (embutida no .exe); `pc/page.js` é o código injetado no Stremio.
+- `docs/`: leitor de QR code no GitHub Pages (a câmera do celular só funciona em https).
 
 ## Fluxo de commit e push
 

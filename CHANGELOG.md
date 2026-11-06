@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0 - 2026-11-06
+
+- Board no celular igual ao do Stremio: as mesmas seções, na mesma ordem, em carrosséis, com "Ver tudo" (lista completa, carrega mais ao rolar).
+- Opções do player no celular: legendas (desligar, idioma, variante, atraso, tamanho e posição), áudio, velocidade, escala da imagem e próximo episódio.
+- Episódios como no Stremio: miniatura com progresso, data e as marcas ASSISTIDO e EM BREVE.
+- Filtro das fontes por addon.
+- Busca enquanto digita, sem botão.
+- Celular no mesmo idioma do Stremio, com as traduções do próprio Stremio.
+- No lugar de "Perfil A/B", o e-mail da conta.
+- Trocar de conta do Stremio pelo celular: as contas usadas ficam salvas no PC, criptografadas; "Adicionar conta" abre a tela de entrar do Stremio.
+- QR code numa janela própria do Windows ("Mostrar QR code"); a página no navegador continua em "Mostrar QR code (Web)".
+- Botão de QR code dentro do Stremio, na barra de cima, enquanto o programa roda.
+- "Ler QR code" pela câmera do celular quando a página não acha o PC (leitor no GitHub Pages).
+
 ## 1.1.0 - 2026-11-06
 
 - O controle agora funciona só na rede de casa, sem nenhum serviço de fora: o programa do PC serve a página do celular e recebe os comandos direto. Sai o ntfy.sh (e o limite diário de mensagens) e o WebRTC.
