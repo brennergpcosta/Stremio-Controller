@@ -181,6 +181,15 @@ func handle(p *peer, c map[string]any) {
 			items = json.RawMessage("[]")
 		}
 		p.send(map[string]any{"t": "list", "which": which, "items": items, "error": errText(err)})
+	case "popts":
+		sendPlayerOptions(p)
+	case "pset":
+		if err := callStremio(5*time.Second, "playerSet", nil, str(c, "what"), c["value"]); err != nil {
+			p.send(map[string]any{"t": "toast", "key": "playFailed", "vars": map[string]string{"error": err.Error()}})
+		}
+		time.Sleep(350 * time.Millisecond)
+		sendPlayerOptions(p)
+		pushState()
 	case "board":
 		var sections json.RawMessage
 		err := callStremio(20*time.Second, "board", &sections)
@@ -241,6 +250,16 @@ func handle(p *peer, c map[string]any) {
 		key, name := openProfile(str(c, "p"))
 		p.send(map[string]any{"t": "toast", "key": key, "vars": map[string]string{"name": name}})
 	}
+}
+
+// Opções do player (legendas, áudio, velocidade...) para a aba Controle do celular
+func sendPlayerOptions(p *peer) {
+	var o json.RawMessage
+	callStremio(5*time.Second, "playerOptions", &o)
+	if o == nil {
+		o = json.RawMessage("null")
+	}
+	p.send(map[string]any{"t": "popts", "data": o})
 }
 
 var inputMu sync.Mutex // teclas e cliques de mais de um celular não se misturam

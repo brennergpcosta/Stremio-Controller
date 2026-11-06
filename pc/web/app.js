@@ -335,6 +335,7 @@ function onMessage(m) {
     }
     case "list": onList(m); return;
     case "board": onBoard(m); return;
+    case "popts": onPopts(m.data); return;
     case "catalog": onCatalog(m); return;
     case "meta": onMeta(m); return;
     case "streams": onStreams(m); return;
@@ -399,6 +400,7 @@ function renderPlayer() {
     setFill($("vol"));
   }
   $("tDur").textContent = has ? fmt(p.duration) : "0:00";
+  $("popts").hidden = !has || !popts;
   $("mini").hidden = !has || tab === "ctl";
   if (has) {
     $("miniTitle").textContent = p.title || "";
@@ -456,6 +458,7 @@ function showTab(name) {
     send({ c: "list", which: name });
   }
   if (name === "search" && !lastQuery) setTimeout(() => $("searchInput").focus(), 50);
+  if (name === "ctl") send({ c: "popts" });
 }
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");
@@ -924,6 +927,134 @@ $("closedView").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-open]");
   if (b) send({ c: "open", p: b.dataset.open }); // o PC responde com o aviso
 });
+
+// ---------------------------------------------------------------------------------------------
+// Opções do player (as dos menus do player do Stremio): legendas, áudio, velocidade, atraso,
+// tamanho e posição da legenda, escala da imagem e próximo episódio
+// ---------------------------------------------------------------------------------------------
+let popts = null;
+let subLang = null; // idioma aberto na lista de legendas
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+// Nome do idioma no idioma do Stremio (os addons usam códigos de 3 letras, como "eng" e "pob")
+const LANG3 = { pob: "pt-BR", pb: "pt-BR", por: "pt", eng: "en", spa: "es", spn: "es", fre: "fr", fra: "fr", ger: "de", deu: "de", ita: "it", jpn: "ja", kor: "ko", chi: "zh", zho: "zh", rus: "ru", ara: "ar", dut: "nl", nld: "nl", pol: "pl", tur: "tr", swe: "sv", nor: "no", dan: "da", fin: "fi", gre: "el", ell: "el", heb: "he", hin: "hi", hun: "hu", cze: "cs", ces: "cs", rum: "ro", ron: "ro", ukr: "uk", vie: "vi", tha: "th", ind: "id", may: "ms", msa: "ms", bul: "bg", hrv: "hr", srp: "sr", slv: "sl", slo: "sk", slk: "sk", per: "fa", fas: "fa", cat: "ca", est: "et", lav: "lv", lit: "lt", ice: "is", isl: "is" };
+const normLang = (code) => LANG3[String(code || "").toLowerCase()] || String(code || "").toLowerCase();
+const langName = (code) => {
+  if (!code) return "?";
+  const c = LANG3[String(code).toLowerCase()] || code;
+  try { return cap(new Intl.DisplayNames([loc() || "en"], { type: "language" }).of(c)); } catch (err) { return code; }
+};
+const numFmt = (n) => n.toLocaleString(loc());
+
+function onPopts(o) {
+  popts = o && typeof o === "object" ? o : null;
+  renderPopts();
+  if ($("optSheet").open) renderOptSheet();
+}
+
+function renderPopts() {
+  const o = popts;
+  $("popts").hidden = !o || !st.player;
+  if (!o) return;
+  const sel = o.subs[o.subSel];
+  $("subsVal").textContent = sel ? langName(sel.lang) : T("SUBTITLES_DISABLED");
+  const au = o.audio[o.audioSel];
+  $("audioVal").textContent = au ? langName(au.lang) + (au.label ? " · " + au.label : "") : "";
+  $("btnAudio").disabled = !o.can.audio || o.audio.length < 2;
+  $("btnSubs").disabled = !o.can.sub;
+  $("scaleVal").textContent = o.scale || "";
+  $("btnNext").hidden = !o.next;
+  if (o.next) $("nextVal").textContent = o.next.season != null ? o.next.season + "x" + o.next.episode : o.next.title || "";
+  $("speeds").replaceChildren(...SPEEDS.map((s) => {
+    const b = document.createElement("button");
+    b.textContent = numFmt(s) + "x";
+    b.classList.toggle("on", Math.abs(s - o.speed) < 0.01);
+    b.disabled = !o.can.speed;
+    b.addEventListener("click", () => pset("speed", s));
+    return b;
+  }));
+}
+
+function pset(what, value) {
+  if (popts && what === "speed") { popts.speed = value; renderPopts(); }
+  send({ c: "pset", what, value });
+}
+
+function openOpt(kind) {
+  if (!popts) return;
+  $("optSheet").dataset.kind = kind;
+  const sel = popts.subs[popts.subSel];
+  subLang = kind === "subs" ? (sel ? normLang(sel.lang) : null) : null;
+  renderOptSheet();
+  if (!$("optSheet").open) $("optSheet").showModal();
+}
+
+function optRow(text, sub, on, onTap) {
+  const b = rowEl({ title: text, sub, hi: on, onTap });
+  b.classList.add("opt-row");
+  return b;
+}
+
+function stepper(label, value, onMinus, onPlus) {
+  const d = document.createElement("div");
+  d.className = "stepper";
+  const l = document.createElement("span");
+  l.className = "stepper-l";
+  l.textContent = label;
+  const minus = document.createElement("button");
+  minus.textContent = "−";
+  minus.addEventListener("click", onMinus);
+  const v = document.createElement("span");
+  v.className = "stepper-v";
+  v.textContent = value;
+  const plus = document.createElement("button");
+  plus.textContent = "+";
+  plus.addEventListener("click", onPlus);
+  d.append(l, minus, v, plus);
+  return d;
+}
+
+function renderOptSheet() {
+  const o = popts;
+  const kind = $("optSheet").dataset.kind;
+  if (!o) { $("optSheet").close(); return; }
+  const body = [];
+  if (kind === "audio") {
+    $("optTitle").textContent = cap(T("AUDIO"));
+    for (const t of o.audio) body.push(optRow(langName(t.lang), t.label, t.i === o.audioSel, () => pset("audio", t.i)));
+  } else {
+    $("optTitle").textContent = cap(T("SUBTITLES"));
+    // Como no menu do Stremio: idiomas, depois as variantes do idioma escolhido
+    const langs = [...new Set(o.subs.map((s) => normLang(s.lang)))];
+    const chips = document.createElement("div");
+    chips.className = "seasons";
+    const chip = (text, on, onTap) => { const b = document.createElement("button"); b.textContent = text; b.classList.toggle("on", on); b.addEventListener("click", onTap); return b; };
+    chips.append(chip(T("SUBTITLES_DISABLED"), o.subSel < 0, () => pset("sub", -1)));
+    for (const l of langs) chips.append(chip(langName(l), subLang === l, () => { subLang = l; renderOptSheet(); }));
+    body.push(chips);
+    if (subLang !== null) {
+      for (const s of o.subs.filter((x) => normLang(x.lang) === subLang)) body.push(optRow(s.label || langName(s.lang), s.origin, s.i === o.subSel, () => pset("sub", s.i)));
+    }
+    if (o.subSel >= 0) {
+      const set = document.createElement("div");
+      set.className = "steppers";
+      if (o.can.delay) set.append(stepper(cap(T("SUBSPICKER_DELAY")), numFmt(Math.round(o.delay / 10) / 100) + "s", () => pset("delay", o.delay - 250), () => pset("delay", o.delay + 250)));
+      if (o.can.size) set.append(stepper(cap(T("SUBSPICKER_SIZE")), o.size + "%", () => pset("size", o.size - 25), () => pset("size", o.size + 25)));
+      if (o.can.offset) set.append(stepper("↕", o.offset + "%", () => pset("offset", o.offset - 1), () => pset("offset", o.offset + 1)));
+      body.unshift(set);
+    }
+  }
+  const scroll = $("optBody").scrollTop;
+  $("optBody").replaceChildren(...body);
+  $("optBody").scrollTop = scroll;
+}
+
+$("btnSubs").addEventListener("click", () => openOpt("subs"));
+$("btnAudio").addEventListener("click", () => openOpt("audio"));
+$("btnScale").addEventListener("click", () => pset("scale", 0));
+$("btnNext").addEventListener("click", () => pset("next", 0));
+$("optSheet").addEventListener("click", (e) => { if (e.target === $("optSheet")) $("optSheet").close(); });
+// Com a aba Controle aberta, as opções acompanham o que muda no PC
+setInterval(() => { if (tab === "ctl" && st.player && connected()) send({ c: "popts" }); }, 4000);
 
 // ---------------------------------------------------------------------------------------------
 let toastTimer = 0;

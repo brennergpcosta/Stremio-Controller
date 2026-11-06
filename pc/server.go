@@ -301,7 +301,7 @@ func serveWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		switch c["c"] {
-		case "toggle", "skip", "seek", "volume", "fs", "play", "open":
+		case "toggle", "skip", "seek", "volume", "fs", "play", "open", "pset":
 			select {
 			case ctl <- c:
 			default:

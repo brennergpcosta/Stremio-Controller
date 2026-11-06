@@ -252,6 +252,101 @@
     };
   };
 
+  // ---------------------------------------------------------------------------------------------
+  // Opções do player (legendas, áudio, velocidade, atraso/tamanho/posição da legenda, escala,
+  // próximo episódio): as mesmas funções que os menus do player do Stremio chamam. Acha pelo React
+  // da tela do player: o estado do vídeo e os callbacks do componente Player (pelo código deles).
+  // ---------------------------------------------------------------------------------------------
+  const playerParts = () => {
+    const el = document.querySelector('[class*="control-bar-buttons-container"]');
+    if (!el) return null;
+    const fk = Object.keys(el).find((k) => k.startsWith("__reactFiber"));
+    let f = fk && el[fk];
+    let bar = null;
+    for (let i = 0; f && i < 40; i++, f = f.return) {
+      const p = f.memoizedProps;
+      if (!bar && p && typeof p === "object" && "onSeekRequested" in p) bar = p;
+      if (bar && typeof f.type === "function") {
+        let h = f.memoizedState, video = null;
+        const cbs = [];
+        for (let n = 0; h && n < 400; n++, h = h.next) {
+          const s = h.memoizedState;
+          for (const x of [s, s && s.current]) if (!video && x && typeof x === "object" && !Array.isArray(x) && "selectedSubtitlesTrackId" in x && "audioTracks" in x) video = x;
+          if (Array.isArray(s) && typeof s[0] === "function" && Array.isArray(s[1])) cbs.push(s[0]);
+        }
+        if (video) {
+          const find = (re) => cbs.find((fn) => re.test(String(fn)));
+          return {
+            bar, video,
+            audio: find(/audioTracks\.find[\s\S]*setAudioTrack/),
+            subEmbedded: find(/source:"embedded"/),
+            subExternal: find(/source:"external"/),
+            delay: find(/subtitleDelay:e\}/),
+            size: find(/subtitleSize:e\}/),
+            offset: find(/subtitleOffset:e\}/),
+            speed: cbs.find((fn) => /^function\(e\)\{\w+\("playbackSpeed",e\)\}$/.test(String(fn)))
+          };
+        }
+      }
+    }
+    return null;
+  };
+  S.tracks = [];
+  S.playerOptions = async () => {
+    if (!location.hash.startsWith("#/player")) return null;
+    const P = playerParts();
+    if (!P) return null;
+    const v = P.video;
+    // Legendas: as do arquivo (embutidas) e as dos addons; o celular só vê índice, idioma e nome
+    S.tracks = [
+      ...(v.subtitlesTracks || []).map((t) => ({ kind: "embedded", t })),
+      ...(v.extraSubtitlesTracks || []).map((t) => ({ kind: "external", t }))
+    ];
+    const subSel = S.tracks.findIndex((x) => (x.kind === "embedded" ? x.t.id === v.selectedSubtitlesTrackId : x.t.id === v.selectedExtraSubtitlesTrackId));
+    const external = subSel >= 0 && S.tracks[subSel].kind === "external";
+    return {
+      subs: S.tracks.map((x, i) => ({ i, lang: x.t.lang || "", label: x.t.label || "", origin: x.kind === "embedded" ? "" : (x.t.origin || "") })),
+      subSel,
+      audio: (v.audioTracks || []).map((t, i) => ({ i, lang: t.lang || "", label: t.label || "" })),
+      audioSel: (v.audioTracks || []).findIndex((t) => t.id === v.selectedAudioTrackId),
+      speed: v.playbackSpeed || 1,
+      delay: (external ? v.extraSubtitlesDelay : v.subtitlesDelay) || 0,
+      size: v.subtitlesSize || v.extraSubtitlesSize || 100,
+      offset: v.subtitlesOffset ?? v.extraSubtitlesOffset ?? 0,
+      scale: P.bar.videoScaleLabel || "",
+      next: P.bar.nextVideo ? { title: P.bar.nextVideo.title || P.bar.nextVideo.name || "", season: P.bar.nextVideo.season, episode: P.bar.nextVideo.episode } : null,
+      can: { audio: !!P.audio, sub: !!(P.subEmbedded && P.subExternal), delay: !!P.delay, size: !!P.size, offset: !!P.offset, speed: !!P.speed }
+    };
+  };
+  S.playerSet = async (what, value) => {
+    const P = playerParts();
+    if (!P) throw new Error("nada tocando");
+    const v = P.video;
+    const n = Number(value);
+    switch (what) {
+      case "sub": {
+        if (n < 0) { (P.subEmbedded || P.subExternal)(null); return true; }
+        const x = S.tracks[n];
+        if (!x) throw new Error("legenda não encontrada");
+        (x.kind === "embedded" ? P.subEmbedded : P.subExternal)(x.t);
+        return true;
+      }
+      case "audio": {
+        const t = (v.audioTracks || [])[n];
+        if (!t) throw new Error("áudio não encontrado");
+        P.audio(t.id);
+        return true;
+      }
+      case "speed": P.speed(Math.max(0.25, Math.min(4, n))); return true;
+      case "delay": P.delay(Math.round(n)); return true;
+      case "size": P.size(Math.max(25, Math.min(400, Math.round(n)))); return true;
+      case "offset": P.offset(Math.max(0, Math.min(100, Math.round(n)))); return true;
+      case "scale": P.bar.onVideoScaleChanged(); return true;
+      case "next": P.bar.onNextVideoRequested(); return true;
+    }
+    throw new Error("opção desconhecida");
+  };
+
   // Ponto (x, y) da página para clicar numa barra (seek ou volume) na fração f
   S.sliderPoint = (which, f) => {
     const el = which === "seek"
