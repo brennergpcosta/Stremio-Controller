@@ -108,6 +108,7 @@ func watchStremio() {
 				logf("Stremio conectado: perfil %s", p.name)
 				updateTray()
 				go pushState()
+				go sendI18n(nil) // outro perfil pode ter outro idioma
 				go func() {
 					<-c.closed
 					logf("Stremio desconectado: perfil %s", p.name)
@@ -121,9 +122,10 @@ func watchStremio() {
 	}
 }
 
-// Abre um perfil do Stremio (pedido do celular)
-func openProfile(p string) string {
-	name := func(p string) string {
+// Abre um perfil do Stremio (pedido do celular). Devolve o aviso para o celular: uma chave de texto
+// (traduzida lá, no idioma do Stremio) e o nome da conta
+func openProfile(p string) (key, name string) {
+	label := func(p string) string {
 		if e := getConfig().Emails[p]; e != "" {
 			return e
 		}
@@ -131,24 +133,24 @@ func openProfile(p string) string {
 	}
 	if s := current(); s != nil {
 		if s.profile == p {
-			return name(p) + " já está aberto"
+			return "alreadyOpen", label(p)
 		}
-		return "Feche " + name(s.profile) + " no PC antes (só um Stremio abre por vez)"
+		return "closeOtherFirst", label(s.profile)
 	}
 	exe := profileExe(p)
 	if exe == "" {
-		return "Caminho de " + name(p) + " não configurado no PC (config.json)"
+		return "notConfigured", label(p)
 	}
 	if _, err := os.Stat(exe); err != nil {
-		return "Não achei o " + name(p) + " no PC"
+		return "exeNotFound", label(p)
 	}
 	cmd := exec.Command(exe)
 	cmd.Dir = dirOf(exe)
 	if err := cmd.Start(); err != nil {
-		return "Não deu para abrir: " + err.Error()
+		return "openFailed", label(p)
 	}
 	go cmd.Wait()
-	return "Abrindo " + name(p) + " no PC…"
+	return "opening", label(p)
 }
 
 func dirOf(p string) string {

@@ -12,6 +12,93 @@ const STORE = "strc-key";
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------------------------------------
+// Idioma: o mesmo da interface do Stremio aberto no PC. Os textos que o Stremio tem vêm das
+// traduções dele (o PC lê na hora); só os poucos textos deste controle, que o Stremio não tem,
+// ficam aqui, em português (Stremio em português) ou inglês (qualquer outro idioma).
+// ---------------------------------------------------------------------------------------------
+const STREMIO_KEYS = [
+  "Board", "Library", "SEARCH", "STREMIO_TV_REMOTE", "BOARD_CONTINUE_WATCHING", "BOARD_CONTINUE_WATCHING_EMPTY",
+  "LIBRARY_EMPTY", "SEARCH_NO_RESULTS", "TYPE_movie", "TYPE_series", "WATCHED", "UPCOMING", "SEASON_NUMBER",
+  "SEASONS", "EPISODE", "LIBRARY_RESUME", "BACK", "NO_STREAM", "NO_STREAMS_FROM_ADDONS", "ERROR",
+  "PLAYER_PLAY", "PLAYER_PAUSE", "BUTTON_SEE_ALL", "ALL_ADDONS", "SUBTITLES", "SUBTITLES_DISABLED", "AUDIO",
+  "PLAYER_PLAYBACK_SPEED", "SUBSPICKER_DELAY", "SUBSPICKER_SIZE", "STREAMS", "CATALOG_com_linvo_cinemeta_top",
+  "TYPE_movie_PL", "TYPE_series_PL", "OFF", "GAMEPAD_ACTION_FULLSCREEN", "PLAYER_MUTE", "PLAYER_UNMUTE",
+  "EXIT_FULLSCREEN", "ENTER_FULLSCREEN", "PLAYER_NEXT_VIDEO", "PLAYER_SCALE_FIT", "PLAYER_SCALE_CROP",
+  "PLAYER_SCALE_STRETCH", "PLAYER_SCALE_ORIGINAL", "PLAYER_SUBTITLES_LANGUAGES", "PLAYER_SUBTITLES_VARIANTS",
+  "PLAYER_SUBTITLES_SETTINGS", "SETTINGS_ACCOUNT", "LOG_IN", "SEARCH_PLACEHOLDER"
+];
+const OWN = {
+  pt: {
+    connecting: "Conectando…", reconnecting: "Reconectando…", connected: "Conectado", disconnected: "Desconectado",
+    pcNotFound: "PC não encontrado", pcUpdating: "Atualizando o PC…", qrChanged: "QR code trocado", notPaired: "Sem pareamento",
+    stremioClosed: "Stremio fechado", nothingPlaying: "Nada tocando", playingOnPc: "Tocando no PC", paused: "Pausado",
+    pickSomething: "Escolha algo para assistir", openingOnPc: "Abrindo no PC…", loadError: "Não deu para carregar",
+    noEpisodes: "Sem episódios", extras: "Extras",
+    playFailed: "Não deu para tocar: {{error}}", alreadyOpen: "{{name}} já está aberto",
+    closeOtherFirst: "Feche {{name}} no PC antes (só um Stremio abre por vez)",
+    notConfigured: "Caminho de {{name}} não configurado no PC (config.json)", exeNotFound: "Não achei o {{name}} no PC",
+    openFailed: "Não deu para abrir {{name}}", opening: "Abrindo {{name}} no PC…",
+    pairTitle: "Parear com o PC",
+    pairText: "No PC, clique no ícone do Stremio Controller perto do relógio, escolha \"Mostrar QR code\" e leia o código com a câmera do celular.",
+    deniedTitle: "QR code trocado no PC",
+    deniedText: "Este celular usa um QR code antigo. No PC, clique no ícone do Stremio Controller perto do relógio, escolha \"Mostrar QR code\" e leia o código de novo.",
+    lostTitle: "Não achei o PC.",
+    lostText: "Confira se o PC está ligado e o Stremio Controller está aberto (ícone perto do relógio), se o celular está no mesmo Wi-Fi do PC e se o endereço do PC não mudou: se mudou, leia o QR code de novo.",
+    closedTitle: "Stremio fechado no PC", closedText: "Abra o Stremio no PC, ou abra daqui:",
+    updatedText: "O programa do PC foi atualizado. Ele já está voltando sozinho, espere alguns segundos."
+  },
+  en: {
+    connecting: "Connecting…", reconnecting: "Reconnecting…", connected: "Connected", disconnected: "Disconnected",
+    pcNotFound: "PC not found", pcUpdating: "Updating the PC…", qrChanged: "QR code changed", notPaired: "Not paired",
+    stremioClosed: "Stremio is closed", nothingPlaying: "Nothing playing", playingOnPc: "Playing on the PC", paused: "Paused",
+    pickSomething: "Pick something to watch", openingOnPc: "Opening on the PC…", loadError: "Could not load",
+    noEpisodes: "No episodes", extras: "Extras",
+    playFailed: "Could not play: {{error}}", alreadyOpen: "{{name}} is already open",
+    closeOtherFirst: "Close {{name}} on the PC first (only one Stremio opens at a time)",
+    notConfigured: "Path for {{name}} is not set on the PC (config.json)", exeNotFound: "Could not find {{name}} on the PC",
+    openFailed: "Could not open {{name}}", opening: "Opening {{name}} on the PC…",
+    pairTitle: "Pair with the PC",
+    pairText: "On the PC, click the Stremio Controller icon next to the clock, choose \"Mostrar QR code\" and scan the code with the phone camera.",
+    deniedTitle: "QR code changed on the PC",
+    deniedText: "This phone uses an old QR code. On the PC, click the Stremio Controller icon next to the clock, choose \"Mostrar QR code\" and scan it again.",
+    lostTitle: "Can't find the PC.",
+    lostText: "Check that the PC is on and Stremio Controller is running (icon next to the clock), that the phone is on the same Wi-Fi as the PC, and that the PC address didn't change: if it did, scan the QR code again.",
+    closedTitle: "Stremio is closed on the PC", closedText: "Open Stremio on the PC, or open it from here:",
+    updatedText: "The PC program was updated. It is coming back by itself, wait a few seconds."
+  }
+};
+const I18N_STORE = "strc-i18n";
+let I18N = (() => { try { return JSON.parse(localStorage.getItem(I18N_STORE)) || null; } catch (err) { return null; } })() ||
+  { lang: navigator.language || "en", dict: {} };
+const ownTable = () => (/^(pt|por)/i.test(I18N.lang || "") ? OWN.pt : OWN.en);
+// Texto: do Stremio (chave dele) ou deste controle (chave própria); {{var}} trocado por vars
+function T(key, vars) {
+  let s = I18N.dict[key] ?? ownTable()[key] ?? OWN.en[key] ?? key;
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{{${k}}}`, v);
+  return s;
+}
+// Idioma válido para datas (o Stremio às vezes usa códigos como "eng")
+function loc() {
+  try { return new Intl.DateTimeFormat(I18N.lang).resolvedOptions().locale; } catch (err) { return undefined; }
+}
+const cap = (s) => (s ? s[0].toLocaleUpperCase() + s.slice(1) : s);
+function applyI18n() {
+  document.documentElement.lang = (I18N.lang || "en").replace(/^eng$/, "en");
+  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = cap(T(el.dataset.i18n));
+  for (const el of document.querySelectorAll("[data-i18n-ph]")) el.placeholder = cap(T(el.dataset.i18nPh));
+  $("connText").textContent = T(connKey);
+}
+function onI18n(data) {
+  if (!data || typeof data !== "object") return;
+  I18N = { lang: String(data.lang || ""), dict: data.dict && typeof data.dict === "object" ? data.dict : {} };
+  try { localStorage.setItem(I18N_STORE, JSON.stringify(I18N)); } catch (err) {}
+  applyI18n();
+  loaded.clear(); // listas com textos novos
+  showTab(tab);
+  render();
+}
+
+// ---------------------------------------------------------------------------------------------
 // Pareamento
 // ---------------------------------------------------------------------------------------------
 function readKey() {
@@ -105,9 +192,12 @@ let denied = false;
 let lastMsgAt = 0;
 let pingTimer = 0;
 
-function setConn(state, text) {
+// Estado da conexão (chave de texto, para trocar junto com o idioma)
+let connKey = "disconnected";
+function setConn(state, key) {
+  connKey = key;
   $("conn").dataset.state = state;
-  $("connText").textContent = text;
+  $("connText").textContent = T(key);
 }
 
 const connected = () => !!ws && ws.readyState === WebSocket.OPEN && authed;
@@ -116,7 +206,7 @@ function connect() {
   if (!secret || denied) return;
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
   clearTimeout(retryTimer);
-  setConn("wait", fails ? "Reconectando…" : "Conectando…");
+  setConn("wait", fails ? "reconnecting" : "connecting");
   const sock = new WebSocket(`ws://${location.host}/ws`);
   ws = sock;
   authed = false;
@@ -135,8 +225,9 @@ function connect() {
       clearTimeout(giveUp);
       authed = true;
       fails = 0;
-      setConn("on", "Conectado");
+      setConn("on", "connected");
       setUpdated(false);
+      send({ c: "i18n", keys: STREMIO_KEYS });
       loaded.clear();
       showTab(tab);
       render();
@@ -153,7 +244,7 @@ function connect() {
     render();
     if (denied) return;
     fails++;
-    setConn("off", pcUpdated ? "Atualizando o PC…" : fails > 3 ? "PC não encontrado" : "Desconectado");
+    setConn("off", pcUpdated ? "pcUpdating" : fails > 3 ? "pcNotFound" : "disconnected");
     $("lostView").hidden = !(fails > 3 && !pcUpdated);
     scheduleRetry(was);
   };
@@ -181,7 +272,7 @@ function check() {
 }
 
 function showDenied() {
-  setConn("off", "QR code trocado");
+  setConn("off", "qrChanged");
   $("deniedView").hidden = false;
   $("mainView").hidden = true;
   $("tabs").hidden = true;
@@ -245,7 +336,8 @@ function onMessage(m) {
     case "list": onList(m); return;
     case "meta": onMeta(m); return;
     case "streams": onStreams(m); return;
-    case "toast": toast(m.text); return;
+    case "toast": toast(m.key ? T(m.key, m.vars) : m.text); return;
+    case "i18n": onI18n(m.data); return;
     case "updated": setUpdated(true); return;
   }
 }
@@ -260,7 +352,7 @@ function showVersion(ver) {
 function render() {
   const s = st.stremio;
   const on = connected();
-  $("profile").textContent = !on ? "" : s ? s.email || "Stremio" : "Stremio fechado";
+  $("profile").textContent = !on ? "" : s ? s.email || "Stremio" : T("stremioClosed");
   renderAccounts();
   $("closedView").hidden = !on || !!s || denied;
   $("mainView").hidden = !on || !s || denied;
@@ -288,8 +380,8 @@ function renderAccounts() {
 function renderPlayer() {
   const p = st.player;
   const has = !!p;
-  $("ctlTitle").textContent = has ? p.title || "…" : "Nada tocando";
-  $("ctlSub").textContent = has ? (p.paused ? "Pausado" : "Tocando no PC") : "Escolha algo em Continuar ou Biblioteca";
+  $("ctlTitle").textContent = has ? p.title || "…" : T("nothingPlaying");
+  $("ctlSub").textContent = has ? T(p.paused ? "paused" : "playingOnPc") : T("pickSomething");
   const poster = has ? safeImg(p.poster) : "";
   if ($("ctlPoster").getAttribute("src") !== poster) $("ctlPoster").src = poster;
   $("ambient").style.backgroundImage = poster ? `url("${poster}")` : "";
@@ -333,7 +425,7 @@ function tickTime() {
     const seek = $("seek");
     seek.value = p.duration ? Math.round(t / p.duration * 1000) : 0;
     setFill(seek);
-    $("miniTime").textContent = `${p.paused ? "Pausado · " : ""}${fmt(t)} / ${fmt(p.duration)}`;
+    $("miniTime").textContent = `${p.paused ? T("paused") + " · " : ""}${fmt(t)} / ${fmt(p.duration)}`;
   } else if (!p) {
     $("tCur").textContent = "0:00";
     $("seek").value = 0;
@@ -419,9 +511,9 @@ function onList(m) {
   const grid = $(`grid-${m.which}`);
   if (!grid) return;
   const items = m.items || [];
-  if (m.error && !items.length) { grid.replaceChildren(emptyEl(`Não deu para carregar: ${m.error}`)); return; }
+  if (m.error && !items.length) { grid.replaceChildren(emptyEl(`${T("loadError")}: ${m.error}`)); return; }
   if (!items.length) {
-    grid.replaceChildren(emptyEl(m.which === "search" ? "Nada encontrado" : m.which === "cw" ? "Nada para continuar" : "Biblioteca vazia"));
+    grid.replaceChildren(emptyEl(T(m.which === "search" ? "SEARCH_NO_RESULTS" : m.which === "cw" ? "BOARD_CONTINUE_WATCHING_EMPTY" : "LIBRARY_EMPTY")));
     return;
   }
   grid.replaceChildren(...items.map(cardEl));
@@ -463,7 +555,7 @@ function sheetHead(title, sub, poster) {
 function openDetail(it) {
   detail = { type: it.type, id: it.id, name: it.name, poster: it.poster, videoId: it.videoId || "", meta: null, season: null };
   streamsFor = "";
-  sheetHead(it.name, it.type === "movie" ? "Filme" : "Série", it.poster);
+  sheetHead(it.name, T(it.type === "movie" ? "TYPE_movie" : "TYPE_series"), it.poster);
   $("sheetBody").replaceChildren(spinner());
   if (!$("sheet").open) $("sheet").showModal();
   if (it.type === "movie") { askStreams(it.id, it.name); return; }
@@ -498,7 +590,7 @@ function rowEl({ title, sub, img, hi, seen, onTap }) {
   if (seen) {
     const s = document.createElement("div");
     s.className = "seen";
-    s.textContent = "Assistido";
+    s.textContent = T("WATCHED");
     txt.append(s);
   }
   b.append(txt);
@@ -506,14 +598,14 @@ function rowEl({ title, sub, img, hi, seen, onTap }) {
   return b;
 }
 
-const epLabel = (v) => `T${v.season} E${v.episode}`;
+const epLabel = (v) => `${v.season}x${v.episode}`; // como no título do player do Stremio
 
 function onMeta(m) {
   if (!detail || m.id !== detail.id) return;
-  if (m.error || !m.meta) { $("sheetBody").replaceChildren(emptyEl(`Não deu para carregar: ${m.error || "sem dados"}`)); return; }
+  if (m.error || !m.meta) { $("sheetBody").replaceChildren(emptyEl(`${T("loadError")}${m.error ? ": " + m.error : ""}`)); return; }
   detail.meta = m.meta;
   const videos = m.meta.videos || [];
-  sheetHead(m.meta.name || detail.name, [m.meta.year, (() => { const n = new Set(videos.filter((v) => v.season > 0).map((v) => v.season)).size; return n ? `${n} temporada${n > 1 ? "s" : ""}` : ""; })()].filter(Boolean).join(" · "), m.meta.poster || detail.poster);
+  sheetHead(m.meta.name || detail.name, [m.meta.year, (() => { const n = new Set(videos.filter((v) => v.season > 0).map((v) => v.season)).size; return n > 1 ? `${n} ${T("SEASONS").toLocaleLowerCase()}` : n ? T("SEASON_NUMBER", { season: [...new Set(videos.filter((v) => v.season > 0).map((v) => v.season))][0] }) : ""; })()].filter(Boolean).join(" · "), m.meta.poster || detail.poster);
   const cur = videos.find((v) => v.id === detail.videoId);
   const seasons = [...new Set(videos.map((v) => v.season))].sort((a, b) => (a === 0) - (b === 0) || a - b);
   detail.season = cur ? cur.season : seasons.find((s) => s > 0) ?? seasons[0];
@@ -526,7 +618,7 @@ function renderEpisodes() {
   const body = [];
   const cur = videos.find((v) => v.id === detail.videoId);
   if (cur) {
-    body.push(rowEl({ title: `Continuar: ${epLabel(cur)}`, sub: cur.title || "", img: cur.thumbnail, hi: true, onTap: () => askStreams(cur.id, `${meta.name} ${epLabel(cur)}`) }));
+    body.push(rowEl({ title: `${T("LIBRARY_RESUME")}: ${epLabel(cur)}`, sub: cur.title || "", img: cur.thumbnail, hi: true, onTap: () => askStreams(cur.id, `${meta.name} ${epLabel(cur)}`) }));
   }
   const seasons = [...new Set(videos.map((v) => v.season))].sort((a, b) => (a === 0) - (b === 0) || a - b);
   if (seasons.length > 1) {
@@ -534,7 +626,7 @@ function renderEpisodes() {
     bar.className = "seasons";
     for (const s of seasons) {
       const b = document.createElement("button");
-      b.textContent = s === 0 ? "Extras" : `Temporada ${s}`;
+      b.textContent = s === 0 ? T("extras") : T("SEASON_NUMBER", { season: s });
       b.classList.toggle("on", s === detail.season);
       b.addEventListener("click", () => { detail.season = s; renderEpisodes(); });
       bar.append(b);
@@ -542,13 +634,13 @@ function renderEpisodes() {
     body.push(bar);
   }
   const eps = videos.filter((v) => v.season === detail.season).sort((a, b) => a.episode - b.episode);
-  if (!eps.length) body.push(emptyEl("Sem episódios"));
+  if (!eps.length) body.push(emptyEl(T("noEpisodes")));
   for (const v of eps) {
     const date = v.released ? new Date(v.released) : null;
     const future = date && date > new Date();
     body.push(rowEl({
-      title: `${v.episode}. ${v.title || `Episódio ${v.episode}`}`,
-      sub: future ? `Estreia em ${date.toLocaleDateString("pt-BR")}` : "",
+      title: `${v.episode}. ${v.title || `${T("EPISODE")} ${v.episode}`}`,
+      sub: future ? `${T("UPCOMING")} · ${date.toLocaleDateString(loc())}` : "",
       img: v.thumbnail, hi: v.id === detail.videoId, seen: v.watched,
       onTap: () => askStreams(v.id, `${meta.name} ${epLabel(v)}`)
     }));
@@ -565,7 +657,7 @@ function askStreams(videoId, label) {
   streamsPending = 1;
   const body = [];
   if (detail.meta && detail.type !== "movie") {
-    const back = rowEl({ title: "‹ Episódios", onTap: () => { streamsFor = ""; renderEpisodes(); } });
+    const back = rowEl({ title: "‹ " + cap(T("BACK")), onTap: () => { streamsFor = ""; renderEpisodes(); } });
     body.push(back);
   }
   const h = document.createElement("div");
@@ -595,13 +687,13 @@ function onStreams(m) {
         title: s.name || addon,
         sub: s.title || "",
         onTap: () => {
-          if (send({ c: "play", sid: s.sid })) { toast("Abrindo no PC…"); $("sheet").close(); showTab("ctl"); }
+          if (send({ c: "play", sid: s.sid })) { toast(T("openingOnPc")); $("sheet").close(); showTab("ctl"); }
         }
       }));
     }
   }
   if (streamsPending) body.push(spinner());
-  else if (!total) body.push(emptyEl("Nenhuma fonte encontrada nos seus addons"));
+  else if (!total) body.push(emptyEl(T("NO_STREAMS_FROM_ADDONS")));
   $("sheetBody").replaceChildren(...body);
 }
 
@@ -681,8 +773,9 @@ function toast(text) {
 }
 
 function start() {
+  applyI18n();
   secret = readKey();
-  if (!secret) { $("pairView").hidden = false; setConn("off", "Sem pareamento"); return; }
+  if (!secret) { $("pairView").hidden = false; setConn("off", "notPaired"); return; }
   setFill(vol);
   showTab("cw");
   render();

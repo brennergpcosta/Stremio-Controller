@@ -20,37 +20,35 @@
       <span class="brand">Stremio Controle <span class="ver" id="pcVer" hidden></span></span>
       <span class="profile" id="profile">…</span>
     </div>
-    <button class="conn" id="conn" data-state="off"><span class="dot"></span><span id="connText">Desconectado</span></button>
+    <button class="conn" id="conn" data-state="off"><span class="dot"></span><span id="connText"></span></button>
   </header>
 
   <div class="notice" id="updNotice" role="status" hidden>
-    <p><strong>O programa do PC foi atualizado.</strong> Ele já está voltando sozinho, espere alguns segundos.</p>
+    <p data-i18n="updatedText"></p>
   </div>
 
   <!-- Sem pareamento -->
   <section class="pair" id="pairView" hidden>
-    <h1>Parear com o PC</h1>
-    <p>No PC, clique no ícone do <b>Stremio Controller</b> perto do relógio, escolha <b>Mostrar QR code</b> e leia o código com a câmera do celular.</p>
+    <h1 data-i18n="pairTitle"></h1>
+    <p data-i18n="pairText"></p>
   </section>
 
   <!-- A chave mudou no PC ("Trocar QR code") -->
   <section class="pair" id="deniedView" hidden>
-    <h1>QR code trocado no PC</h1>
-    <p>Este celular usa um QR code antigo. No PC, clique no ícone do <b>Stremio Controller</b> perto do relógio, escolha <b>Mostrar QR code</b> e leia o código de novo.</p>
+    <h1 data-i18n="deniedTitle"></h1>
+    <p data-i18n="deniedText"></p>
   </section>
 
   <!-- Sem resposta do PC -->
   <div class="notice" id="lostView" role="status" hidden>
-    <p><strong>Não achei o PC.</strong> Confira se:</p>
-    <p>• o PC está ligado e o <b>Stremio Controller</b> está aberto (ícone perto do relógio);<br>
-    • o celular está no <b>mesmo Wi-Fi</b> do PC;<br>
-    • o endereço do PC não mudou: se mudou, no PC clique em <b>Mostrar QR code</b> e leia de novo.</p>
+    <p><strong data-i18n="lostTitle"></strong></p>
+    <p data-i18n="lostText"></p>
   </div>
 
   <!-- Stremio fechado no PC -->
   <section class="closed" id="closedView" hidden>
-    <h2>Stremio fechado no PC</h2>
-    <p>Abra o Stremio no PC, ou abra daqui:</p>
+    <h2 data-i18n="closedTitle"></h2>
+    <p data-i18n="closedText"></p>
     <div class="closed-btns" id="closedBtns"></div>
   </section>
 
@@ -59,22 +57,22 @@
     <button class="mini" id="mini" hidden>
       <span class="mini-icon" id="miniIcon"></span>
       <span class="mini-text"><span class="mini-title" id="miniTitle"></span><span class="mini-time" id="miniTime"></span></span>
-      <span class="mini-go">Controle ›</span>
+      <span class="mini-go"><span data-i18n="STREMIO_TV_REMOTE"></span> ›</span>
     </button>
 
     <section class="pane" id="pane-cw"><div class="grid" id="grid-cw"></div></section>
     <section class="pane" id="pane-lib" hidden><div class="grid" id="grid-lib"></div></section>
     <section class="pane" id="pane-search" hidden>
       <form class="search" id="searchForm">
-        <input type="search" id="searchInput" placeholder="Filmes e séries" enterkeyhint="search" autocomplete="off">
+        <input type="search" id="searchInput" data-i18n-ph="SEARCH" enterkeyhint="search" autocomplete="off">
       </form>
       <div class="grid" id="grid-search"></div>
     </section>
 
     <section class="pane ctl" id="pane-ctl" hidden>
       <img class="ctl-poster" id="ctlPoster" alt="">
-      <div class="ctl-title" id="ctlTitle">Nada tocando</div>
-      <div class="ctl-sub" id="ctlSub">Escolha algo em Continuar ou Biblioteca</div>
+      <div class="ctl-title" id="ctlTitle"></div>
+      <div class="ctl-sub" id="ctlSub"></div>
       <div class="seek">
         <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Posição">
         <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
@@ -100,10 +98,10 @@
   </main>
 
   <nav class="tabs" id="tabs" hidden>
-    <button data-tab="cw"><svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l4 4 4-4H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg>Continuar</button>
-    <button data-tab="lib"><svg viewBox="0 0 24 24"><path d="M4 6H2v14a2 2 0 0 0 2 2h14v-2H4V6zm16-4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>Biblioteca</button>
-    <button data-tab="search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.47 6.47 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
-    <button data-tab="ctl"><svg viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18v12zM10 7.5v7l5.5-3.5z"/></svg>Controle</button>
+    <button data-tab="cw"><svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l4 4 4-4H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg><span data-i18n="BOARD_CONTINUE_WATCHING"></span></button>
+    <button data-tab="lib"><svg viewBox="0 0 24 24"><path d="M4 6H2v14a2 2 0 0 0 2 2h14v-2H4V6zm16-4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg><span data-i18n="Library"></span></button>
+    <button data-tab="search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.47 6.47 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><span data-i18n="SEARCH"></span></button>
+    <button data-tab="ctl"><svg viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18v12zM10 7.5v7l5.5-3.5z"/></svg><span data-i18n="STREMIO_TV_REMOTE"></span></button>
   </nav>
 
   <!-- Detalhe: temporadas, episódios e fontes -->

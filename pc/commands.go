@@ -60,6 +60,7 @@ func stateLoop() {
 		pushState()
 		n++
 		if n%5 == 0 && current() != nil {
+			checkLang()
 			var items json.RawMessage
 			if callStremio(5*time.Second, "list", &items, "cw") == nil {
 				h := sha256.Sum256(items)
@@ -71,6 +72,60 @@ func stateLoop() {
 				}
 			}
 		}
+	}
+}
+
+// Idioma: o celular pede as chaves de texto do Stremio que usa; o PC devolve as traduções no idioma
+// da interface do Stremio aberto e manda de novo sozinho quando esse idioma muda
+var (
+	i18nMu   sync.Mutex
+	i18nKeys = map[string]bool{}
+	lastLang string
+)
+
+func i18nDict() (json.RawMessage, error) {
+	i18nMu.Lock()
+	keys := make([]string, 0, len(i18nKeys))
+	for k := range i18nKeys {
+		keys = append(keys, k)
+	}
+	i18nMu.Unlock()
+	var out json.RawMessage
+	err := callStremio(8*time.Second, "i18n", &out, keys)
+	return out, err
+}
+
+func sendI18n(to *peer) {
+	d, err := i18nDict()
+	if err != nil || d == nil {
+		return
+	}
+	var x struct {
+		Lang string `json:"lang"`
+	}
+	json.Unmarshal(d, &x)
+	i18nMu.Lock()
+	lastLang = x.Lang
+	i18nMu.Unlock()
+	msg := map[string]any{"t": "i18n", "data": d}
+	if to != nil {
+		to.send(msg)
+	} else {
+		sendAll(msg)
+	}
+}
+
+// Confere o idioma do Stremio (chamado a cada 5 s com celular conectado)
+func checkLang() {
+	var lang string
+	if callStremio(3*time.Second, "lang", &lang) != nil {
+		return
+	}
+	i18nMu.Lock()
+	changed := lang != "" && lang != lastLang
+	i18nMu.Unlock()
+	if changed {
+		sendI18n(nil)
 	}
 }
 
@@ -104,6 +159,17 @@ func handle(p *peer, c map[string]any) {
 		}
 		updateTray()
 		pushState()
+	case "i18n":
+		if ks, ok := c["keys"].([]any); ok {
+			i18nMu.Lock()
+			for _, k := range ks {
+				if s, ok := k.(string); ok && len(s) < 80 && len(i18nKeys) < 500 {
+					i18nKeys[s] = true
+				}
+			}
+			i18nMu.Unlock()
+		}
+		sendI18n(p)
 	case "list":
 		which := str(c, "which")
 		if which != "cw" && which != "lib" {
@@ -134,7 +200,7 @@ func handle(p *peer, c map[string]any) {
 		streams(p, str(c, "type"), str(c, "id"), str(c, "videoId"))
 	case "play":
 		if err := callStremio(10*time.Second, "play", nil, str(c, "sid")); err != nil {
-			p.send(map[string]any{"t": "toast", "text": "Não deu para tocar: " + err.Error()})
+			p.send(map[string]any{"t": "toast", "key": "playFailed", "vars": map[string]string{"error": err.Error()}})
 			return
 		}
 		time.Sleep(1500 * time.Millisecond)
@@ -161,7 +227,8 @@ func handle(p *peer, c map[string]any) {
 			playerKey(p, "f", "KeyF", 70)
 		}
 	case "open":
-		p.send(map[string]any{"t": "toast", "text": openProfile(str(c, "p"))})
+		key, name := openProfile(str(c, "p"))
+		p.send(map[string]any{"t": "toast", "key": key, "vars": map[string]string{"name": name}})
 	}
 }
 
@@ -172,11 +239,11 @@ func playerKey(p *peer, key, code string, vk int) {
 	defer inputMu.Unlock()
 	s := current()
 	if s == nil {
-		p.send(map[string]any{"t": "toast", "text": errClosed.Error()})
+		p.send(map[string]any{"t": "toast", "key": "stremioClosed"})
 		return
 	}
 	if readPlayer() == nil {
-		p.send(map[string]any{"t": "toast", "text": "Nada tocando no Stremio"})
+		p.send(map[string]any{"t": "toast", "key": "nothingPlaying"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -197,7 +264,7 @@ func slider(p *peer, which string, f float64) {
 	defer cancel()
 	var pt *struct{ X, Y float64 }
 	if err := s.run(ctx, "sliderPoint", &pt, which, f); err != nil || pt == nil {
-		p.send(map[string]any{"t": "toast", "text": "Nada tocando no Stremio"})
+		p.send(map[string]any{"t": "toast", "key": "nothingPlaying"})
 		return
 	}
 	s.c.click(ctx, pt.X, pt.Y)

@@ -29,7 +29,41 @@
   const cinemeta = (list) => list.find((a) => a.manifest.id === "com.linvo.cinemeta");
   const epInfo = (vid) => {
     const m = /:(\d+):(\d+)$/.exec(vid || "");
-    return m ? `T${m[1]} E${m[2]}` : "";
+    return m ? `${m[1]}x${m[2]}` : ""; // como no título do player do Stremio
+  };
+
+  // Traduções do próprio Stremio: o i18next que a interface dele usa (getI18n do react-i18next), no
+  // idioma escolhido nele. Acha o módulo pelo código (o react-i18next já está carregado pela página).
+  let i18nObj = null;
+  const i18n = () => {
+    if (i18nObj) return i18nObj;
+    let req = null;
+    try { window.webpackChunkstremio.push([[Symbol("strc")], {}, (r) => { req = r; }]); } catch (e) {}
+    if (!req) return null;
+    for (const id of Object.keys(req.m)) {
+      let src = "";
+      try { src = String(req.m[id]); } catch (e) { continue; }
+      if (!src.includes("initReactI18next") || !src.includes("getI18n")) continue;
+      try {
+        const v = req(id).getI18n();
+        if (v && typeof v.t === "function") { i18nObj = v; return v; }
+      } catch (e) {}
+    }
+    return null;
+  };
+  S.lang = async () => {
+    const v = i18n();
+    return (v && (v.resolvedLanguage || v.language)) || (await core.getState("ctx")).profile.settings.interfaceLanguage || "";
+  };
+  S.i18n = async (keys) => {
+    const lang = await S.lang();
+    const v = i18n();
+    const dict = {};
+    if (v) for (const k of keys || []) {
+      const s = v.t(k);
+      if (typeof s === "string" && s && (s !== k || (v.exists && v.exists(k)))) dict[k] = s;
+    }
+    return { lang, dict };
   };
 
   S.profile = async () => {
