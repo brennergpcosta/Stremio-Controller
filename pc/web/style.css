@@ -249,3 +249,10 @@ button.profile::after { content: " ▾"; font-size: 10px; color: var(--text-3); 
 .acc-x { flex: none; border: 0; background: var(--surface-2); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; color: var(--text-2); }
 .acc-add { width: 100%; margin-top: 8px; }
 .acc-hint { font-size: 12.5px; color: var(--text-3); text-align: center; margin: 10px 4px 0; }
+
+/* Velocidade como no player do Stremio */
+.speed-box { margin-top: 14px; background: var(--surface); border-radius: 14px; padding: 10px 12px 12px; text-align: center; }
+.speed-box .popt-title { margin: 2px 0 4px; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+.speed-val { font-weight: 700; font-size: 15px; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.speed-box .speeds { justify-content: space-between; margin-top: 10px; }
+.speed-box .speeds button { padding: 5px 9px; font-size: 13px; }

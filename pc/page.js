@@ -337,7 +337,7 @@
         P.audio(t.id);
         return true;
       }
-      case "speed": P.speed(Math.max(0.25, Math.min(4, n))); return true;
+      case "speed": P.speed(Math.round(Math.max(0.1, Math.min(4, n)) * 20) / 20); return true;
       case "delay": P.delay(Math.round(n)); return true;
       case "size": P.size(Math.max(25, Math.min(400, Math.round(n)))); return true;
       case "offset": P.offset(Math.max(0, Math.min(100, Math.round(n)))); return true;

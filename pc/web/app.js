@@ -21,7 +21,7 @@ const STREMIO_KEYS = [
   "LIBRARY_EMPTY", "SEARCH_NO_RESULTS", "TYPE_movie", "TYPE_series", "WATCHED", "UPCOMING", "SEASON_NUMBER",
   "SEASONS", "EPISODE", "LIBRARY_RESUME", "BACK", "NO_STREAM", "NO_STREAMS_FROM_ADDONS", "ERROR",
   "PLAYER_PLAY", "PLAYER_PAUSE", "BUTTON_SEE_ALL", "ALL_ADDONS", "SUBTITLES", "SUBTITLES_DISABLED", "AUDIO",
-  "PLAYER_PLAYBACK_SPEED", "SUBSPICKER_DELAY", "SUBSPICKER_SIZE", "STREAMS", "CATALOG_com_linvo_cinemeta_top",
+  "PLAYER_PLAYBACK_SPEED", "PLAYBACK_SPEED", "SUBSPICKER_DELAY", "SUBSPICKER_SIZE", "STREAMS", "CATALOG_com_linvo_cinemeta_top",
   "TYPE_movie_PL", "TYPE_series_PL", "OFF", "GAMEPAD_ACTION_FULLSCREEN", "PLAYER_MUTE", "PLAYER_UNMUTE",
   "EXIT_FULLSCREEN", "ENTER_FULLSCREEN", "PLAYER_NEXT_VIDEO", "PLAYER_SCALE_FIT", "PLAYER_SCALE_CROP",
   "PLAYER_SCALE_STRETCH", "PLAYER_SCALE_ORIGINAL", "PLAYER_SUBTITLES_LANGUAGES", "PLAYER_SUBTITLES_VARIANTS",
@@ -949,7 +949,10 @@ $("closedView").addEventListener("click", (e) => {
 // ---------------------------------------------------------------------------------------------
 let popts = null;
 let subLang = null; // idioma aberto na lista de legendas
-const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const SPEEDS = [0.5, 1, 1.25, 1.5, 1.75, 2, 4]; // os mesmos atalhos do player do Stremio
+const speedText = (s) => `${Math.round(s * 100) / 100}x`; // como o Stremio mostra (1x, 1.25x)
+let speedDragging = false;
+let speedHoldUntil = 0;
 // Nome do idioma no idioma do Stremio (os addons usam códigos de 3 letras, como "eng" e "pob")
 const LANG3 = { pob: "pt-BR", pb: "pt-BR", por: "pt", eng: "en", spa: "es", spn: "es", fre: "fr", fra: "fr", ger: "de", deu: "de", ita: "it", jpn: "ja", kor: "ko", chi: "zh", zho: "zh", rus: "ru", ara: "ar", dut: "nl", nld: "nl", pol: "pl", tur: "tr", swe: "sv", nor: "no", dan: "da", fin: "fi", gre: "el", ell: "el", heb: "he", hin: "hi", hun: "hu", cze: "cs", ces: "cs", rum: "ro", ron: "ro", ukr: "uk", vie: "vi", tha: "th", ind: "id", may: "ms", msa: "ms", bul: "bg", hrv: "hr", srp: "sr", slv: "sl", slo: "sk", slk: "sk", per: "fa", fas: "fa", cat: "ca", est: "et", lav: "lv", lit: "lt", ice: "is", isl: "is" };
 const normLang = (code) => LANG3[String(code || "").toLowerCase()] || String(code || "").toLowerCase();
@@ -979,15 +982,47 @@ function renderPopts() {
   $("scaleVal").textContent = o.scale || "";
   $("btnNext").hidden = !o.next;
   if (o.next) $("nextVal").textContent = o.next.season != null ? o.next.season + "x" + o.next.episode : o.next.title || "";
+  // Enquanto arrasta (ou logo depois), o valor do celular manda; depois, o do PC
+  if (!speedDragging && performance.now() > speedHoldUntil) {
+    $("speedSlider").value = o.speed;
+    $("speedVal").textContent = speedText(o.speed);
+    setFill($("speedSlider"));
+  }
+  $("speedSlider").disabled = !o.can.speed;
+  const shown = Number($("speedSlider").value);
   $("speeds").replaceChildren(...SPEEDS.map((s) => {
     const b = document.createElement("button");
-    b.textContent = numFmt(s) + "x";
-    b.classList.toggle("on", Math.abs(s - o.speed) < 0.01);
+    b.textContent = speedText(s);
+    b.classList.toggle("on", Math.abs(s - shown) < 0.001);
     b.disabled = !o.can.speed;
-    b.addEventListener("click", () => pset("speed", s));
+    b.addEventListener("click", () => setSpeed(s));
     return b;
   }));
 }
+
+function setSpeed(s) {
+  s = Math.round(Math.max(0.1, Math.min(4, s)) * 20) / 20;
+  $("speedSlider").value = s;
+  $("speedVal").textContent = speedText(s);
+  setFill($("speedSlider"));
+  speedHoldUntil = performance.now() + 2500;
+  pset("speed", s);
+}
+let speedTimer = 0;
+$("speedSlider").addEventListener("input", () => {
+  speedDragging = true;
+  const s = Number($("speedSlider").value);
+  $("speedVal").textContent = speedText(s);
+  setFill($("speedSlider"));
+  for (const b of $("speeds").children) b.classList.toggle("on", b.textContent === speedText(s));
+  clearTimeout(speedTimer);
+  speedTimer = setTimeout(() => pset("speed", s), 150);
+});
+$("speedSlider").addEventListener("change", () => {
+  clearTimeout(speedTimer);
+  speedDragging = false;
+  setSpeed(Number($("speedSlider").value));
+});
 
 function pset(what, value) {
   if (popts && what === "speed") { popts.speed = value; renderPopts(); }

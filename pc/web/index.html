@@ -114,8 +114,13 @@
           <button class="popt" id="btnScale"><svg viewBox="0 0 24 24"><path d="M19 12h-2v3h-3v2h5v-5zM7 9h3V7H5v5h2V9zm14-6H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H3V5h18v14z"/></svg><span class="popt-l" id="scaleVal"></span></button>
           <button class="popt" id="btnNext" hidden><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg><span class="popt-l" data-i18n="PLAYER_NEXT_VIDEO"></span><span class="popt-v" id="nextVal"></span></button>
         </div>
-        <div class="popt-title" data-i18n="PLAYER_PLAYBACK_SPEED"></div>
-        <div class="speeds" id="speeds"></div>
+        <!-- Velocidade como no player do Stremio: valor, slider (0,1x a 4x) e atalhos -->
+        <div class="speed-box">
+          <div class="popt-title" data-i18n="PLAYBACK_SPEED"></div>
+          <div class="speed-val" id="speedVal">1x</div>
+          <input type="range" id="speedSlider" min="0.1" max="4" step="0.05" value="1" aria-label="Playback speed">
+          <div class="speeds" id="speeds"></div>
+        </div>
       </div>
     </section>
   </main>
