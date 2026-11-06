@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/skip2/go-qrcode"
 	"golang.org/x/sys/windows/registry"
@@ -87,4 +88,33 @@ func setAutostart(on bool) error {
 		return err
 	}
 	return k.SetStringValue(runName, `"`+exePath()+`"`)
+}
+
+// Botão do QR code dentro do Stremio (barra de cima): renova a cada 5 s com o QR atual. Se o
+// programa fechar, o botão some sozinho em até 20 s (ver page.js).
+func qrButtonLoop() {
+	var lastLink, png64 string
+	for range time.Tick(5 * time.Second) {
+		if current() == nil {
+			continue
+		}
+		link := pairLink()
+		if link == "" {
+			continue
+		}
+		if link != lastLink {
+			png, err := qrcode.Encode(link, qrcode.Medium, 512)
+			if err != nil {
+				continue
+			}
+			png64, lastLink = base64.StdEncoding.EncodeToString(png), link
+		}
+		var lang string
+		callStremio(3*time.Second, "lang", &lang)
+		title, text := "Pair your phone", "Scan with the phone camera, on the same Wi-Fi as this PC. Click anywhere to close."
+		if strings.HasPrefix(strings.ToLower(lang), "pt") || strings.HasPrefix(strings.ToLower(lang), "por") {
+			title, text = "Parear o celular", "Leia com a câmera do celular, no mesmo Wi-Fi deste PC. Clique em qualquer lugar para fechar."
+		}
+		callStremio(3*time.Second, "qrButton", nil, png64, title, text)
+	}
 }

@@ -175,6 +175,7 @@ func main() {
 		}
 	}()
 	go stateLoop()
+	go qrButtonLoop()
 	go updateLoop()
 	if first {
 		go func() { <-trayReady; showQRWindow() }()

@@ -347,6 +347,90 @@
     throw new Error("opção desconhecida");
   };
 
+  // ---------------------------------------------------------------------------------------------
+  // Botão do QR code na barra de cima do Stremio: abre o QR de pareamento por cima da tela. Só
+  // existe enquanto o programa do PC roda: ele renova o "sinal de vida" a cada poucos segundos; sem
+  // sinal por 20 s, o botão some. Volta sozinho quando o Stremio redesenha a barra.
+  // ---------------------------------------------------------------------------------------------
+  const QR_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="display:block"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm-5 0h3v3h-3v-3zm3 3h2v2h-2v-2zm-3 3h3v2h-3v-2zm5 0h3v2h-3v-2zm0-3h3v2h-3v-2z"/></svg>';
+  // Estado na window (não no S): uma versão nova do page.js continua de onde a velha parou
+  const qrAlive = () => Date.now() - (window.__strcQrAlive || 0) < 20000;
+  const removeQr = () => {
+    document.querySelectorAll(".strc-qr-btn, #strc-qr-overlay").forEach((e) => e.remove());
+  };
+  const showQrOverlay = () => {
+    const qr = window.__strcQr;
+    if (!qr || document.getElementById("strc-qr-overlay")) return;
+    const o = document.createElement("div");
+    o.id = "strc-qr-overlay";
+    o.style.cssText = "position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:rgba(0,0,0,.72);cursor:pointer;font-family:inherit";
+    const card = document.createElement("div");
+    card.style.cssText = "background:#fff;color:#111;border-radius:18px;padding:22px 26px;text-align:center;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.5)";
+    const h = document.createElement("div");
+    h.style.cssText = "font-size:18px;font-weight:600;margin-bottom:12px";
+    h.textContent = qr.title;
+    const img = document.createElement("img");
+    img.src = "data:image/png;base64," + qr.png;
+    img.style.cssText = "width:300px;height:300px;display:block;margin:0 auto;image-rendering:pixelated";
+    const p = document.createElement("div");
+    p.style.cssText = "font-size:13px;color:#555;margin-top:12px;line-height:1.4";
+    p.textContent = qr.text;
+    card.append(h, img, p);
+    o.append(card);
+    const close = () => { o.remove(); document.removeEventListener("keydown", onKey, true); };
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    o.addEventListener("click", close);
+    document.addEventListener("keydown", onKey, true);
+    document.body.append(o);
+  };
+  const placeQr = () => {
+    const qr = window.__strcQr;
+    if (!qr || !qrAlive()) { removeQr(); return; }
+    const bars = document.querySelectorAll('[class*="horizontal-nav-bar"] [class*="buttons-container"]');
+    for (const bc of bars) {
+      if (bc.querySelector(".strc-qr-btn")) continue;
+      const sib = bc.querySelector('[class*="button-container"]');
+      const b = document.createElement("div");
+      b.className = (sib ? sib.className + " " : "") + "strc-qr-btn";
+      b.tabIndex = -1;
+      b.title = qr.title;
+      b.style.cssText = "display:flex;align-items:center;justify-content:center;cursor:pointer;color:inherit";
+      b.innerHTML = QR_ICON;
+      // Mesmo estilo do ícone do botão vizinho (cor e tamanho do tema do Stremio)
+      const sibSvg = sib && sib.querySelector("svg");
+      if (sibSvg && sibSvg.getAttribute("class")) {
+        const svg = b.querySelector("svg");
+        svg.setAttribute("class", sibSvg.getAttribute("class"));
+        svg.removeAttribute("width");
+        svg.removeAttribute("height");
+        svg.style.display = "";
+      }
+      b.addEventListener("click", (e) => { e.stopPropagation(); showQrOverlay(); });
+      bc.insertBefore(b, bc.firstChild);
+    }
+  };
+  S.qrButton = (png, title, text) => {
+    window.__strcQrAlive = Date.now();
+    const old = window.__strcQr;
+    window.__strcQr = { png, title, text };
+    if (!old || old.png !== png || old.title !== title) {
+      document.getElementById("strc-qr-overlay")?.remove();
+      document.querySelectorAll(".strc-qr-btn").forEach((e) => e.remove());
+    }
+    if (!window.__strcQrWatch) {
+      let pending = false;
+      window.__strcQrWatch = new MutationObserver(() => {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(() => { pending = false; placeQr(); });
+      });
+      window.__strcQrWatch.observe(document.body, { childList: true, subtree: true });
+      setInterval(() => { if (!qrAlive()) removeQr(); }, 5000);
+    }
+    placeQr();
+    return true;
+  };
+
   // Ponto (x, y) da página para clicar numa barra (seek ou volume) na fração f
   S.sliderPoint = (which, f) => {
     const el = which === "seek"
