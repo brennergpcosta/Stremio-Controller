@@ -2,19 +2,126 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0b14">
+  <meta name="referrer" content="no-referrer">
   <title>Stremio Controle</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
   <style>
-    body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: #0c0b14; color: #f1f1f4; font: 16px/1.5 "Segoe UI", system-ui, sans-serif; text-align: center; }
-    .box { max-width: 460px; padding: 24px; }
-    p { color: #a9a8b8; }
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: #0c0b14; color: #f1f1f4; font: 16px/1.5 "Segoe UI", Roboto, system-ui, sans-serif; text-align: center; }
+    .box { width: min(460px, 100%); padding: 24px 16px; box-sizing: border-box; }
+    h1 { font-size: 21px; margin: 0 0 6px; }
+    p { color: #a9a8b8; margin: 8px 0; }
+    .btn { display: block; width: 100%; border: 0; border-radius: 999px; padding: 13px 18px; margin-top: 12px; font: inherit; font-weight: 600; background: #7b5bf5; color: #fff; text-decoration: none; box-sizing: border-box; }
+    .btn.ghost { background: rgba(255, 255, 255, 0.1); color: #f1f1f4; }
+    .cam { position: relative; margin: 14px auto 0; width: 100%; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: #000; }
+    .cam video { width: 100%; height: 100%; object-fit: cover; }
+    .cam::after { content: ""; position: absolute; inset: 18%; border: 3px solid rgba(255, 255, 255, 0.85); border-radius: 16px; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35); }
+    .msg { min-height: 1.5em; color: #ffa53d; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <div class="box">
-    <h1>O controle mudou de endereço</h1>
-    <p>Agora a página do controle vem direto do programa do PC, na rede de casa, sem nenhum serviço de fora.</p>
-    <p>No PC, clique no ícone do <b>Stremio Controller</b> perto do relógio, escolha <b>Mostrar QR code</b> e leia o código com o celular no mesmo Wi-Fi.</p>
+    <h1 id="title"></h1>
+    <p id="text"></p>
+    <a class="btn" id="last" hidden></a>
+    <button class="btn ghost" id="scan"></button>
+    <div class="cam" id="cam" hidden><video id="video" playsinline muted></video></div>
+    <p class="msg" id="msg"></p>
+    <p id="help"></p>
   </div>
+  <script>
+    // Leitor do QR code do Stremio Controller. A câmera só funciona em página segura (https), e a
+    // página do controle vem do PC pela rede de casa (http): por isso o leitor fica aqui. Ele lê o QR
+    // com o leitor do próprio navegador (BarcodeDetector), sem nenhum serviço de fora, e abre o
+    // endereço do PC. Guarda o último endereço neste aparelho para abrir de novo com um toque.
+    const pt = /^pt/i.test(navigator.language || "");
+    const L = pt ? {
+      title: "Stremio Controle",
+      text: "Leia o QR code do Stremio Controller (no PC: ícone perto do relógio → Mostrar QR code), com o celular no mesmo Wi-Fi do PC.",
+      scan: "Ler QR code", last: "Abrir o controle", stop: "Parar a câmera",
+      help: "Dica: adicione esta página à tela inicial. Ela sempre acha o controle, mesmo se o endereço do PC mudar (é só ler o QR de novo).",
+      noDetector: "Este navegador não lê QR code pela página. Use o app da câmera do celular para ler o código.",
+      noCamera: "Não deu para abrir a câmera. Permita o acesso à câmera e tente de novo.",
+      notOurs: "Este QR code não é do Stremio Controller."
+    } : {
+      title: "Stremio Remote",
+      text: "Scan the Stremio Controller QR code (on the PC: icon next to the clock → Mostrar QR code), with the phone on the same Wi-Fi as the PC.",
+      scan: "Scan QR code", last: "Open the remote", stop: "Stop camera",
+      help: "Tip: add this page to the home screen. It always finds the remote, even if the PC address changes (just scan the QR again).",
+      noDetector: "This browser can't read QR codes from a page. Use the phone camera app to scan the code.",
+      noCamera: "Could not open the camera. Allow camera access and try again.",
+      notOurs: "This QR code is not from Stremio Controller."
+    };
+    const $ = (id) => document.getElementById(id);
+    document.documentElement.lang = pt ? "pt-BR" : "en";
+    $("title").textContent = L.title;
+    $("text").textContent = L.text;
+    $("scan").textContent = L.scan;
+    $("help").textContent = L.help;
+    $("last").textContent = L.last;
+
+    // Só aceita o endereço do controle: http, IP da rede de casa, com a chave depois do "#"
+    function valid(text) {
+      let u;
+      try { u = new URL(text); } catch (e) { return null; }
+      if (u.protocol !== "http:" || !/^#k=[\w-]{40,}$/.test(u.hash)) return null;
+      const h = u.hostname;
+      const priv = /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^169\.254\./.test(h) || /\.local$/i.test(h);
+      return priv ? u.href : null;
+    }
+
+    let last = "";
+    try { last = valid(localStorage.getItem("strc-last") || "") || ""; } catch (e) {}
+    if (last) { $("last").href = last; $("last").hidden = false; }
+
+    function go(url) {
+      try { localStorage.setItem("strc-last", url); } catch (e) {}
+      location.href = url;
+    }
+
+    let stream = null, timer = 0;
+    function stop() {
+      clearInterval(timer);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      $("cam").hidden = true;
+      $("scan").textContent = L.scan;
+    }
+
+    async function scan() {
+      if (stream) { stop(); return; }
+      $("msg").textContent = "";
+      if (!("BarcodeDetector" in window)) { $("msg").textContent = L.noDetector; return; }
+      let det;
+      try { det = new BarcodeDetector({ formats: ["qr_code"] }); } catch (e) { $("msg").textContent = L.noDetector; return; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      } catch (e) { $("msg").textContent = L.noCamera; return; }
+      const v = $("video");
+      v.srcObject = stream;
+      $("cam").hidden = false;
+      $("scan").textContent = L.stop;
+      await v.play().catch(() => {});
+      timer = setInterval(async () => {
+        if (!stream || v.readyState < 2) return;
+        let codes = [];
+        try { codes = await det.detect(v); } catch (e) { return; }
+        for (const c of codes) {
+          const url = valid(c.rawValue || "");
+          if (url) { stop(); go(url); return; }
+          $("msg").textContent = L.notOurs;
+        }
+      }, 250);
+    }
+
+    $("scan").addEventListener("click", scan);
+    $("last").addEventListener("click", (e) => { e.preventDefault(); go(last); });
+    // Aberta pelo botão "Ler QR code" da página do controle: já liga a câmera
+    if (location.hash === "#scan") { history.replaceState(null, "", location.pathname); scan(); }
+  </script>
 </body>
 </html>

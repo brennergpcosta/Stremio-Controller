@@ -45,7 +45,8 @@ const OWN = {
     lostTitle: "Não achei o PC.",
     lostText: "Confira se o PC está ligado e o Stremio Controller está aberto (ícone perto do relógio), se o celular está no mesmo Wi-Fi do PC e se o endereço do PC não mudou: se mudou, leia o QR code de novo.",
     closedTitle: "Stremio fechado no PC", closedText: "Abra o Stremio no PC, ou abra daqui:",
-    updatedText: "O programa do PC foi atualizado. Ele já está voltando sozinho, espere alguns segundos."
+    updatedText: "O programa do PC foi atualizado. Ele já está voltando sozinho, espere alguns segundos.",
+    scanQr: "Ler QR code"
   },
   en: {
     connecting: "Connecting…", reconnecting: "Reconnecting…", connected: "Connected", disconnected: "Disconnected",
@@ -64,7 +65,8 @@ const OWN = {
     lostTitle: "Can't find the PC.",
     lostText: "Check that the PC is on and Stremio Controller is running (icon next to the clock), that the phone is on the same Wi-Fi as the PC, and that the PC address didn't change: if it did, scan the QR code again.",
     closedTitle: "Stremio is closed on the PC", closedText: "Open Stremio on the PC, or open it from here:",
-    updatedText: "The PC program was updated. It is coming back by itself, wait a few seconds."
+    updatedText: "The PC program was updated. It is coming back by itself, wait a few seconds.",
+    scanQr: "Scan QR code"
   }
 };
 const I18N_STORE = "strc-i18n";

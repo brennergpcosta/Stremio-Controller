@@ -237,3 +237,4 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius
 .stepper-l { font-size: 14px; font-weight: 600; }
 .stepper button { border: 0; background: var(--surface-2); border-radius: 50%; width: 36px; height: 36px; font-size: 20px; }
 .stepper-v { text-align: center; font-variant-numeric: tabular-nums; font-size: 14px; }
+.scan-btn { display: inline-block; margin-top: 14px; text-decoration: none; }
