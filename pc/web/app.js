@@ -1,20 +1,13 @@
 /**
  * Stremio Controle (página do celular).
- * Conversa direto com o programa do PC (Stremio Controller) por WebRTC. A oferta e a resposta passam
- * por um tópico do ntfy.sh, criptografadas com a chave do QR code (AES-GCM); o tópico sai da própria
- * chave (SHA-256). A chave vem no "#k=" do link e fica guardada neste aparelho.
- * Mesmo protocolo de pareamento do controle da YTPowerFeed.
+ * Servida pelo próprio programa do PC (Stremio Controller) na rede de casa. Os comandos e o estado
+ * vão por um WebSocket direto com o PC, sem nenhum serviço de fora. A chave vem no "#k=" do QR code e
+ * fica guardada neste aparelho; o PC confere com um desafio (HMAC-SHA256), então a chave não passa
+ * pela rede.
  */
 
-// ?relay=http://127.0.0.1:porta só para testes no próprio PC (relay local); fora disso, o ntfy.sh
-const RELAY = (() => {
-  const r = new URLSearchParams(location.search).get("relay") || "";
-  return /^http:\/\/127\.0\.0\.1:\d+$/.test(r) ? r : "https://ntfy.sh";
-})();
-const ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
-const CHUNK = 3000;
-const STORE = "strc-remote-key";
-const me = `ph-${Math.random().toString(36).slice(2, 10)}`;
+const PAGE_VER = "__VERSION__";
+const STORE = "strc-key";
 
 const $ = (id) => document.getElementById(id);
 
@@ -32,62 +25,63 @@ function readKey() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Criptografia e sinalização (a mesma do programa do PC)
+// SHA-256 e HMAC em JS puro (em http na rede de casa o navegador não libera o crypto.subtle)
 // ---------------------------------------------------------------------------------------------
-const b64 = {
-  enc: (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
-  dec: (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0))
-};
-const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
-
-async function keys(secret) {
-  const raw = b64.dec(secret);
-  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", raw));
-  const topic = `strc-${Array.from(hash.slice(0, 12), (b) => b.toString(16).padStart(2, "0")).join("")}`;
-  const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
-  return { topic, key };
-}
-
-async function seal(key, obj) {
-  const plain = await pipe(new TextEncoder().encode(JSON.stringify(obj)), new CompressionStream("deflate-raw"));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain));
-  const out = new Uint8Array(12 + ct.length);
-  out.set(iv);
-  out.set(ct, 12);
-  return b64.enc(out);
-}
-
-async function unseal(key, text) {
-  const bytes = b64.dec(text);
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(0, 12) }, key, bytes.slice(12));
-  return JSON.parse(new TextDecoder().decode(await pipe(new Uint8Array(plain), new DecompressionStream("deflate-raw"))));
-}
-
-async function publish(ctx, obj) {
-  const data = await seal(ctx.key, obj);
-  const id = Math.random().toString(36).slice(2, 10);
-  const n = Math.ceil(data.length / CHUNK);
-  for (let p = 0; p < n; p++) {
-    const r = await fetch(`${RELAY}/${ctx.topic}?cache=no`, {
-      method: "POST",
-      body: JSON.stringify({ f: me, i: id, p, n, d: data.slice(p * CHUNK, (p + 1) * CHUNK) })
-    });
-    // O ntfy.sh grátis aceita 250 mensagens por dia por endereço de internet
-    if (r.status === 429) throw Object.assign(new Error("limite do ntfy"), { quota: true });
-    if (!r.ok) throw new Error(`ntfy: HTTP ${r.status}`);
+const K256 = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+]);
+function sha256(bytes) {
+  const l = bytes.length;
+  const n = ((l + 9 + 63) >> 6) << 6;
+  const m = new Uint8Array(n);
+  m.set(bytes);
+  m[l] = 0x80;
+  const dv = new DataView(m.buffer);
+  dv.setUint32(n - 4, l * 8);
+  dv.setUint32(n - 8, Math.floor(l / 0x20000000));
+  const h = new Uint32Array([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]);
+  const w = new Uint32Array(64);
+  const r = (x, k) => (x >>> k) | (x << (32 - k));
+  for (let o = 0; o < n; o += 64) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(o + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = r(w[i - 15], 7) ^ r(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = r(w[i - 2], 17) ^ r(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (hh + (r(e, 6) ^ r(e, 11) ^ r(e, 25)) + ((e & f) ^ (~e & g)) + K256[i] + w[i]) | 0;
+      const t2 = ((r(a, 2) ^ r(a, 13) ^ r(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
   }
+  const out = new Uint8Array(32);
+  const ov = new DataView(out.buffer);
+  for (let i = 0; i < 8; i++) ov.setUint32(i * 4, h[i]);
+  return out;
 }
-
-const parts = new Map();
-function reassemble(env) {
-  if (env.n === 1) return env.d;
-  const slot = parts.get(env.i) || { got: [], at: Date.now() };
-  slot.got[env.p] = env.d;
-  parts.set(env.i, slot);
-  if (slot.got.filter((x) => x !== undefined).length < env.n) return null;
-  parts.delete(env.i);
-  return slot.got.join("");
+function hmacHex(keyStr, msgStr) {
+  const enc = new TextEncoder();
+  let key = enc.encode(keyStr);
+  if (key.length > 64) key = sha256(key);
+  const k = new Uint8Array(64);
+  k.set(key);
+  const msg = enc.encode(msgStr);
+  const inner = new Uint8Array(64 + msg.length);
+  const outer = new Uint8Array(64 + 32);
+  for (let i = 0; i < 64; i++) { inner[i] = k[i] ^ 0x36; outer[i] = k[i] ^ 0x5c; }
+  inner.set(msg, 64);
+  outer.set(sha256(inner), 64);
+  return Array.from(sha256(outer), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 const deviceName = () => {
@@ -100,233 +94,114 @@ const deviceName = () => {
 };
 
 // ---------------------------------------------------------------------------------------------
-// Conexão (igual ao controle da YTPowerFeed)
+// Conexão com o PC (WebSocket na rede de casa)
 // ---------------------------------------------------------------------------------------------
-let ctx = null;
-let es = null;
-let esAlive = 0;
-let esReady = null;
-let esAt = 0;
-let pc = null;
-let dc = null;
-let waiting = null;
-let gen = 0;
-let attempt = 0;
-let attemptAt = 0;
+let secret = "";
+let ws = null;
+let authed = false;
 let retryTimer = 0;
 let fails = 0;
-let quotaUntil = 0;
-let pcUpdated = false;
+let denied = false;
+let lastMsgAt = 0;
+let pingTimer = 0;
 
 function setConn(state, text) {
   $("conn").dataset.state = state;
   $("connText").textContent = text;
 }
 
-function listenRelay() {
-  es?.close();
-  const mine = new EventSource(`${RELAY}/${ctx.topic}/sse`);
-  es = mine;
-  esAlive = 0;
-  esAt = Date.now();
-  const alive = () => { if (es === mine) esAlive = Date.now(); };
-  mine.addEventListener("keepalive", alive);
-  mine.onmessage = async (e) => {
-    alive();
-    try {
-      const env = JSON.parse(JSON.parse(e.data).message || "null");
-      if (!env || env.f === me || typeof env.d !== "string") return;
-      const text = reassemble(env);
-      if (!text) return;
-      const msg = await unseal(ctx.key, text);
-      if (msg.type === "answer" && msg.to === me && waiting) waiting(msg);
-    } catch (err) {}
-  };
-  esReady = new Promise((resolve) => {
-    mine.addEventListener("open", () => { alive(); resolve(); });
-    setTimeout(resolve, 4000);
-  });
-  return esReady;
-}
-const relayFresh = () => !!es && es.readyState !== EventSource.CLOSED &&
-  (Date.now() - esAlive < 60000 || (!esAlive && Date.now() - esAt < 4000));
+const connected = () => !!ws && ws.readyState === WebSocket.OPEN && authed;
 
-function iceDone(peer) {
-  if (peer.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve) => {
-    let quiet = 0;
-    const t = setTimeout(() => done(), 2500);
-    const done = () => { clearTimeout(t); clearTimeout(quiet); resolve(); };
-    peer.addEventListener("icegatheringstatechange", () => { if (peer.iceGatheringState === "complete") done(); });
-    peer.addEventListener("icecandidate", (e) => {
-      if (!e.candidate) { done(); return; }
-      if (/ typ srflx /.test(e.candidate.candidate)) { clearTimeout(quiet); quiet = setTimeout(done, 300); }
-    });
-  });
-}
-
-const PING_MS = 1500;
-let lastMsgAt = 0;
-let pingTimer = 0;
-let hiddenAt = 0;
-let lastTick = Date.now();
-
-function dropConnection() {
-  const old = dc;
-  dc = null;
-  try { old?.close(); } catch (err) {}
-  try { pc?.close(); } catch (err) {}
-  pc = null;
-}
-
-function abandonAttempt() {
-  if (!attempt) return;
-  gen++;
-  attempt = 0;
-  waiting = null;
-  if (dc?.readyState !== "open") dropConnection();
-}
-
-function reconnectNow() {
-  clearTimeout(pingTimer);
-  pingTimer = 0;
-  setConn("wait", "Reconectando…");
-  abandonAttempt();
-  dropConnection();
-  fails = 0;
-  esAlive = 0;
-  connect();
-}
-
-function check(force) {
-  if (!ctx || document.hidden || attempt && Date.now() - attemptAt < 20000) return;
-  if (attempt) abandonAttempt();
-  if (dc?.readyState !== "open") { if (force) { fails = 0; connect(); } return; }
-  if (pc && ["failed", "closed"].includes(pc.connectionState)) { reconnectNow(); return; }
-  if (pingTimer || (!force && Date.now() - lastMsgAt < 3000)) return;
-  const sentAt = Date.now();
-  try { dc.send(JSON.stringify({ c: "ping" })); } catch (err) {}
-  pingTimer = setTimeout(() => {
-    pingTimer = 0;
-    if (lastMsgAt >= sentAt || document.hidden) return;
-    reconnectNow();
-  }, PING_MS);
-}
-
-function wake(e) {
-  if (document.hidden) { hiddenAt = hiddenAt || Date.now(); return; }
-  const slept = (hiddenAt && Date.now() - hiddenAt > 2000) || ["online", "resume", "frozen-gap"].includes(e?.type);
-  hiddenAt = 0;
-  if (slept && ctx) {
-    abandonAttempt();
-    if (!relayFresh() || esAlive) listenRelay();
-  }
-  check(true);
-}
-
-async function connect() {
-  if (attempt && Date.now() - attemptAt < 20000) return;
-  if (dc?.readyState === "open") return;
-  if (Date.now() < quotaUntil) { showQuota(); return; }
-  abandonAttempt();
-  const my = ++gen;
-  const stale = () => my !== gen;
-  attempt = my;
-  attemptAt = Date.now();
+function connect() {
+  if (!secret || denied) return;
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
   clearTimeout(retryTimer);
-  setConn("wait", "Procurando o PC…");
-  try {
-    const ready = relayFresh() ? esReady : listenRelay();
-    try { pc?.close(); } catch (err) {}
-    const peer = new RTCPeerConnection({ iceServers: ICE });
-    const chan = peer.createDataChannel("strc");
-    pc = peer;
-    dc = chan;
-    chan.onopen = () => {
-      if (dc !== chan) return;
+  setConn("wait", fails ? "Reconectando…" : "Conectando…");
+  const sock = new WebSocket(`ws://${location.host}/ws`);
+  ws = sock;
+  authed = false;
+  const giveUp = setTimeout(() => { if (ws === sock && !authed) sock.close(); }, 8000);
+  sock.onmessage = (e) => {
+    if (ws !== sock) return;
+    lastMsgAt = Date.now();
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === "challenge") {
+      sock.send(JSON.stringify({ c: "auth", mac: hmacHex(secret, m.nonce), name: deviceName() }));
+      return;
+    }
+    if (m.t === "denied") { denied = true; showDenied(); return; }
+    if (m.t === "ok") {
+      clearTimeout(giveUp);
+      authed = true;
       fails = 0;
-      lastMsgAt = Date.now();
       setConn("on", "Conectado");
       setUpdated(false);
-      send({ c: "hello", name: deviceName() });
       loaded.clear();
       showTab(tab);
-    };
-    chan.onclose = () => { if (dc !== chan) return; dc = null; setConn("off", "Desconectado"); scheduleRetry(true); };
-    chan.onmessage = (e) => { lastMsgAt = Date.now(); try { onMessage(JSON.parse(e.data)); } catch (err) {} };
-    peer.onconnectionstatechange = () => {
-      if (pc !== peer) return;
-      if (peer.connectionState === "failed") { dropConnection(); setConn("off", "A conexão caiu"); scheduleRetry(true); }
-      else if (peer.connectionState === "disconnected") check(true);
-    };
-    await peer.setLocalDescription(await peer.createOffer());
-    await Promise.all([iceDone(peer), ready]);
-    if (stale()) return;
-    const oid = Math.random().toString(36).slice(2, 10);
-    const answer = new Promise((resolve, reject) => {
-      waiting = (m) => { if (m.o === undefined || m.o === oid) resolve(m); };
-      setTimeout(() => reject(new Error("sem resposta")), 8000);
-    });
-    await publish(ctx, { type: "offer", o: oid, sdp: peer.localDescription.sdp, name: deviceName() });
-    const msg = await answer;
-    if (stale()) return;
-    waiting = null;
-    await peer.setRemoteDescription({ type: "answer", sdp: msg.sdp });
-    setTimeout(() => { if (dc === chan && chan.readyState !== "open") { dropConnection(); scheduleRetry(); } }, 8000);
-  } catch (err) {
-    if (stale()) return;
-    waiting = null;
-    if (err?.quota) { await onQuota(); return; }
+      render();
+      return;
+    }
+    onMessage(m);
+  };
+  sock.onclose = () => {
+    clearTimeout(giveUp);
+    if (ws !== sock) return;
+    ws = null;
+    const was = authed;
+    authed = false;
+    render();
+    if (denied) return;
     fails++;
-    esAlive = 0;
-    setConn("off", fails > 1 ? (pcUpdated ? "Atualizando o PC…" : "PC não encontrado. O Stremio Controller está aberto no PC?") : "Procurando o PC…");
-    scheduleRetry();
-  } finally {
-    if (attempt === my) attempt = 0;
-  }
+    setConn("off", pcUpdated ? "Atualizando o PC…" : fails > 3 ? "PC não encontrado" : "Desconectado");
+    $("lostView").hidden = !(fails > 3 && !pcUpdated);
+    scheduleRetry(was);
+  };
 }
 
-const RETRY_S = [2, 5, 10, 20, 40, 60];
+// Sem o PC: tenta de novo em 1, 2, 4… até 15 s, enquanto a página estiver à vista
 function scheduleRetry(soon) {
   clearTimeout(retryTimer);
   if (document.hidden) return;
-  if (!soon && fails >= 10) { setConn("off", "PC não encontrado. Toque aqui para procurar"); return; }
-  retryTimer = setTimeout(connect, soon ? 300 : RETRY_S[Math.min(fails, RETRY_S.length) - 1] * 1000 || 2000);
+  const s = soon ? 0.5 : Math.min(15, 2 ** Math.min(fails - 1, 4));
+  retryTimer = setTimeout(connect, s * 1000);
 }
 
-async function onQuota() {
-  let reset = 0;
-  try { reset = ((await (await fetch(`${RELAY}/v1/account`)).json())?.stats?.reset_at || 0) * 1000; } catch (err) {}
-  quotaUntil = reset > Date.now() ? reset : Date.now() + 30 * 60000;
-  showQuota();
-  clearTimeout(retryTimer);
-  retryTimer = setTimeout(() => { if (!document.hidden) { fails = 0; connect(); } }, Math.min(quotaUntil - Date.now() + 5000, 2 ** 31 - 1));
+// A página ficou parada (celular trancado): confere a conexão com um ping; sem resposta, refaz
+function check() {
+  if (document.hidden) return;
+  if (!connected()) { if (!ws) connect(); return; }
+  if (Date.now() - lastMsgAt < 4000 || pingTimer) return;
+  const sentAt = Date.now();
+  send({ c: "ping" });
+  pingTimer = setTimeout(() => {
+    pingTimer = 0;
+    if (lastMsgAt < sentAt && ws) ws.close();
+  }, 2500);
 }
 
-function showQuota() {
-  const at = new Date(quotaUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  setConn("off", `Limite diário do ntfy.sh atingido. Volta às ${at}`);
+function showDenied() {
+  setConn("off", "QR code trocado");
+  $("deniedView").hidden = false;
+  $("mainView").hidden = true;
+  $("tabs").hidden = true;
+  $("closedView").hidden = true;
 }
 
 function send(obj) {
-  if (dc?.readyState === "open") { dc.send(JSON.stringify(obj)); check(false); return true; }
-  wake();
+  if (connected()) { ws.send(JSON.stringify(obj)); return true; }
+  connect();
   return false;
 }
 
-$("conn").addEventListener("click", () => { if (dc?.readyState !== "open") wake({ type: "tap" }); });
-document.addEventListener("visibilitychange", wake);
-document.addEventListener("resume", wake);
-window.addEventListener("pageshow", wake);
-window.addEventListener("online", wake);
-window.addEventListener("focus", wake);
-setInterval(() => {
-  const gap = Date.now() - lastTick;
-  lastTick = Date.now();
-  if (gap > 10000) wake({ type: "frozen-gap" });
-  else check(false);
-}, 3000);
+$("conn").addEventListener("click", () => { if (!connected()) { fails = 0; connect(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+window.addEventListener("pageshow", check);
+window.addEventListener("online", () => { fails = 0; check(); });
+window.addEventListener("focus", check);
+setInterval(check, 3000);
 
+let pcUpdated = false;
 function setUpdated(on) {
   pcUpdated = on;
   $("updNotice").hidden = !on;
@@ -361,6 +236,8 @@ function onMessage(m) {
       st = m;
       stAt = performance.now();
       showVersion(m.ver);
+      // O programa do PC foi atualizado: a página também (vem dele), então recarrega
+      if (/^\d/.test(PAGE_VER) && m.ver && m.ver !== PAGE_VER) { location.reload(); return; }
       if (!!m.stremio !== hadStremio || m.stremio?.profile !== oldProfile) { loaded.clear(); if (m.stremio) showTab(tab); }
       render();
       return;
@@ -382,11 +259,12 @@ function showVersion(ver) {
 
 function render() {
   const s = st.stremio;
-  const connected = dc?.readyState === "open";
-  $("profile").textContent = !connected ? "" : s ? `Perfil ${s.profile}${s.email ? ` · ${s.email}` : ""}` : "Stremio fechado";
-  $("closedView").hidden = !connected || !!s;
-  $("mainView").hidden = !connected || !s;
-  $("tabs").hidden = !connected || !s;
+  const on = connected();
+  $("profile").textContent = !on ? "" : s ? `Perfil ${s.profile}${s.email ? ` · ${s.email}` : ""}` : "Stremio fechado";
+  $("closedView").hidden = !on || !!s || denied;
+  $("mainView").hidden = !on || !s || denied;
+  $("tabs").hidden = !on || !s || denied;
+  if (on) $("lostView").hidden = true;
   renderPlayer();
 }
 
@@ -454,7 +332,7 @@ function showTab(name) {
   for (const b of $("tabs").children) b.classList.toggle("on", b.dataset.tab === name);
   for (const k of ["cw", "lib", "search", "ctl"]) $(`pane-${k}`).hidden = k !== name;
   renderPlayer();
-  if (!st.stremio || dc?.readyState !== "open") return;
+  if (!st.stremio || !connected()) return;
   if ((name === "cw" || name === "lib") && !loaded.has(name)) {
     loaded.add(name);
     if (!$(`grid-${name}`).children.length) $(`grid-${name}`).replaceChildren(spinner());
@@ -774,27 +652,14 @@ function toast(text) {
   toastTimer = setTimeout(() => t.classList.remove("on"), 2600);
 }
 
-async function start() {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-    // Versão nova da página: recarrega sozinha (uma vez)
-    let reloaded = false;
-    const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloaded || !hadController) return;
-      reloaded = true;
-      location.reload();
-    });
-  }
-  const secret = readKey();
+function start() {
+  secret = readKey();
   if (!secret) { $("pairView").hidden = false; setConn("off", "Sem pareamento"); return; }
-  ctx = await keys(secret);
   setFill(vol);
   showTab("cw");
   render();
   requestAnimationFrame(frame);
   connect();
-  // A conexão mudou: mostra ou esconde as telas
   setInterval(() => { render(); tickTime(); }, 1000);
 }
 start();

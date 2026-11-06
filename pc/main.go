@@ -1,9 +1,8 @@
 // Stremio Controller: programa do PC. Fica perto do relógio, acha o Stremio 5 aberto (porta CDP do
-// WebView2) e atende o celular (página em docs/, GitHub Pages) por WebRTC.
+// WebView2), serve a página do celular na rede de casa e recebe os comandos dele por WebSocket.
 package main
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"os"
@@ -16,8 +15,6 @@ import (
 )
 
 var version = "dev" // trocada no build (-ldflags "-X main.version=1.0.0")
-
-const pageURL = "https://brennergpcosta.github.io/Stremio-Controller/"
 
 //go:embed assets/icon.ico
 var iconICO []byte
@@ -60,45 +57,6 @@ func singleInstance() bool {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Sinalização: escuta o tópico da chave atual; trocar a chave reinicia a escuta
-// ---------------------------------------------------------------------------------------------
-var (
-	sigMu     sync.Mutex
-	sigCancel context.CancelFunc
-	relayOK   bool
-)
-
-func startSignaling() {
-	sigMu.Lock()
-	if sigCancel != nil {
-		sigCancel()
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	sigCancel = cancel
-	sigMu.Unlock()
-	s, err := newSecret(getConfig().Key)
-	if err != nil {
-		logf("chave inválida: %v", err)
-		return
-	}
-	go listen(ctx, s, func(from string, sig signal) {
-		switch sig.Type {
-		case "offer":
-			if sig.SDP != "" {
-				go onOffer(s, from, sig)
-			}
-		case "bye":
-			dropPeer(from)
-		}
-	}, func(ok bool) {
-		sigMu.Lock()
-		relayOK = ok
-		sigMu.Unlock()
-		updateTray()
-	})
-}
-
-// ---------------------------------------------------------------------------------------------
 // Ícone perto do relógio
 // ---------------------------------------------------------------------------------------------
 var (
@@ -123,13 +81,13 @@ func updateTray() {
 	ph := openPeers()
 	switch len(ph) {
 	case 0:
-		sigMu.Lock()
-		ok := relayOK
-		sigMu.Unlock()
-		if ok {
+		switch {
+		case serverErr != "":
+			mPhones.SetTitle("Erro: " + serverErr)
+		case lanIP() == "":
+			mPhones.SetTitle("PC fora da rede de casa")
+		default:
 			mPhones.SetTitle("Esperando o celular")
-		} else {
-			mPhones.SetTitle("Sem internet (tentando de novo)")
 		}
 	case 1:
 		mPhones.SetTitle("Celular conectado: " + ph[0].name)
@@ -166,7 +124,6 @@ func onReady() {
 			case <-mNewQR.ClickedCh:
 				setKey(newKey())
 				dropAllPeers()
-				startSignaling()
 				logf("QR code trocado")
 				showQR()
 			case <-mAuto.ClickedCh:
@@ -204,8 +161,13 @@ func main() {
 			setAutostart(true)
 		}
 	}
-	startSignaling()
+	startServer()
 	go watchStremio()
+	go func() { // o IP do PC pode mudar: o menu acompanha
+		for range time.Tick(30 * time.Second) {
+			updateTray()
+		}
+	}()
 	go stateLoop()
 	go updateLoop()
 	if first {

@@ -4,9 +4,11 @@
 // As fontes (com os links e as chaves dos addons) ficam aqui dentro: o celular só recebe nome e id.
 (() => {
   const V = "__VERSION__";
-  if (window.__strc && window.__strc.v === V) return;
+  // A página ainda carregando: sem o core, não instala (senão ficaria um __strc quebrado)
+  if (!window.core) throw new Error("o Stremio ainda está carregando");
+  if (window.__strc && window.__strc.v === V && window.__strc.core === window.core) return;
   const core = window.core;
-  const S = { v: V, streams: new Map(), seq: 0 };
+  const S = { v: V, core, streams: new Map(), seq: 0 };
   const base = (u) => u.replace(/\/manifest\.json$/, "");
   const res = (a, name, type, id) => a.manifest.resources.some((r) =>
     (r === name || r.name === name) &&

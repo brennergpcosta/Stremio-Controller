@@ -11,7 +11,7 @@ import (
 
 // Configuração local, fora do repositório: %APPDATA%\Stremio-Controller\config.json
 type Config struct {
-	Key      string `json:"key"`      // chave do pareamento (vai no QR code)
+	Key      string `json:"key"`     // chave do pareamento (vai no QR code)
 	ProfileA string `json:"perfilA"` // caminho do stremio-shell-ng.exe do perfil A (vazio: instalação padrão)
 	ProfileB string `json:"perfilB"` // caminho do .exe do perfil B (porta 9223)
 }
