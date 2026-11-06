@@ -60,9 +60,9 @@ func singleInstance() bool {
 // Ícone perto do relógio
 // ---------------------------------------------------------------------------------------------
 var (
-	mStatus, mPhones, mQR, mNewQR, mAuto, mQuit *systray.MenuItem
-	trayReady                                   = make(chan struct{})
-	trayMu                                      sync.Mutex
+	mStatus, mPhones, mQR, mQRWeb, mNewQR, mAuto, mQuit *systray.MenuItem
+	trayReady                                           = make(chan struct{})
+	trayMu                                              sync.Mutex
 )
 
 func updateTray() {
@@ -111,7 +111,8 @@ func onReady() {
 	mPhones = systray.AddMenuItem("Esperando o celular", "")
 	mPhones.Disable()
 	systray.AddSeparator()
-	mQR = systray.AddMenuItem("Mostrar QR code", "Abre o QR code para parear o celular")
+	mQR = systray.AddMenuItem("Mostrar QR code", "Abre uma janela com o QR code para parear o celular")
+	mQRWeb = systray.AddMenuItem("Mostrar QR code (Web)", "Abre o QR code no navegador")
 	mNewQR = systray.AddMenuItem("Trocar QR code", "Cria uma chave nova: o celular antigo para de funcionar")
 	mAuto = systray.AddMenuItemCheckbox("Iniciar com o Windows", "", autostartOn())
 	systray.AddSeparator()
@@ -123,12 +124,14 @@ func onReady() {
 		for {
 			select {
 			case <-mQR.ClickedCh:
+				showQRWindow()
+			case <-mQRWeb.ClickedCh:
 				showQR()
 			case <-mNewQR.ClickedCh:
 				setKey(newKey())
 				dropAllPeers()
 				logf("QR code trocado")
-				showQR()
+				showQRWindow()
 			case <-mAuto.ClickedCh:
 				on := !mAuto.Checked()
 				if err := setAutostart(on); err != nil {
@@ -174,7 +177,7 @@ func main() {
 	go stateLoop()
 	go updateLoop()
 	if first {
-		go func() { <-trayReady; showQR() }()
+		go func() { <-trayReady; showQRWindow() }()
 	}
 	systray.Run(onReady, func() { logf("saindo") })
 }
