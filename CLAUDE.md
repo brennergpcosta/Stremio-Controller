@@ -26,3 +26,9 @@ Este repositório é público. Nada dos perfis do Stremio do Brenner nem dados p
 - Caminhos locais (como a pasta de instalação de um perfil ou a pasta do usuário) ficam só num arquivo de configuração local fora do repositório, por exemplo `%APPDATA%\Stremio-Controller\config.json`.
 - No código e na documentação use exemplos genéricos (perfil A, porta 9222, IDs de exemplo).
 - Antes de cada commit, confira o diff procurando e-mails, chaves, URLs com tokens e títulos.
+
+## Sem serviços de terceiros
+
+- Faça tudo localmente, com ferramentas nossas. O usuário só roda o programa e usa o quanto quiser, sem se preocupar com nada.
+- Não use serviços de terceiros (servidores, APIs, retransmissores), a menos que sejam excelentes, gratuitos para sempre e sem limite de uso. Bibliotecas são liberadas.
+- O controle funciona na rede de casa (Wi-Fi): o programa do PC serve a página do celular e recebe os comandos direto, sem nada no meio.
