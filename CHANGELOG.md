@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 - 2026-11-06
+
+- O controle agora funciona só na rede de casa, sem nenhum serviço de fora: o programa do PC serve a página do celular e recebe os comandos direto. Sai o ntfy.sh (e o limite diário de mensagens) e o WebRTC.
+- A página do celular vem de dentro do programa, então está sempre na mesma versão dele e recarrega sozinha quando ele se atualiza.
+- Pareamento: o QR code leva o endereço do PC na rede. Leia de novo depois de atualizar (o QR antigo não serve mais). A chave não passa pela rede (desafio HMAC-SHA256).
+- Avisos na página: QR code trocado no PC, e PC não encontrado (desligado, outro Wi-Fi ou endereço mudou).
+- Conserto: logo depois de abrir o Stremio, o programa às vezes não conseguia se ligar a ele até reiniciar.
+- CLAUDE.md: regra de não usar serviços de terceiros.
+
 ## 1.0.1 - 2026-11-05
 
 - QR code: a página agora abre por um endereço local (127.0.0.1) em vez de um arquivo, que às vezes dava "ERR_FILE_NOT_FOUND" no navegador.
