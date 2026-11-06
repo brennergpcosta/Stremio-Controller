@@ -348,6 +348,37 @@
   };
 
   // ---------------------------------------------------------------------------------------------
+  // Contas: a sessão do Stremio fica no localStorage da página (profile, com a chave de login, e os
+  // dados da conta: biblioteca, notificações...). O PC guarda uma cópia criptografada (DPAPI) para
+  // trocar de conta. Nada disso vai para o celular.
+  // ---------------------------------------------------------------------------------------------
+  const DEVICE_KEYS = ["installation_id", "schema_version", "streaming_server_urls"];
+  const accountKeys = () => Object.keys(localStorage).filter((k) => !DEVICE_KEYS.includes(k));
+  S.session = () => {
+    let p = null;
+    try { p = JSON.parse(localStorage.getItem("profile") || "null"); } catch (e) {}
+    const u = p && p.auth && p.auth.user;
+    if (!u || !p.auth.key) return null;
+    const data = {};
+    for (const k of accountKeys()) data[k] = localStorage.getItem(k);
+    return { id: String(u._id || ""), email: u.email || "", avatar: u.avatar || "", data };
+  };
+  // Troca de conta: põe os dados salvos no lugar dos atuais e recarrega a página do Stremio
+  S.restore = (data) => {
+    for (const k of accountKeys()) localStorage.removeItem(k);
+    for (const [k, v] of Object.entries(data || {})) if (!DEVICE_KEYS.includes(k) && typeof v === "string") localStorage.setItem(k, v);
+    setTimeout(() => { location.hash = "#/"; location.reload(); }, 50);
+    return true;
+  };
+  // Adicionar conta: tira a conta atual só deste aparelho (sem sair no servidor, para a sessão salva
+  // continuar valendo) e abre a tela de entrar do Stremio
+  S.logoutLocal = () => {
+    for (const k of accountKeys()) localStorage.removeItem(k);
+    setTimeout(() => { location.hash = "#/intro"; location.reload(); }, 50);
+    return true;
+  };
+
+  // ---------------------------------------------------------------------------------------------
   // Botão do QR code na barra de cima do Stremio: abre o QR de pareamento por cima da tela. Só
   // existe enquanto o programa do PC roda: ele renova o "sinal de vida" a cada poucos segundos; sem
   // sinal por 20 s, o botão some. Volta sozinho quando o Stremio redesenha a barra.

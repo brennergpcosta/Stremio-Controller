@@ -181,6 +181,30 @@ func handle(p *peer, c map[string]any) {
 			items = json.RawMessage("[]")
 		}
 		p.send(map[string]any{"t": "list", "which": which, "items": items, "error": errText(err)})
+	case "accounts":
+		p.send(map[string]any{"t": "accounts", "list": accountsForPhone()})
+	case "accSwitch":
+		p.send(map[string]any{"t": "toast", "key": "accSwitching"})
+		email, err := switchAccount(str(c, "id"))
+		switch {
+		case err != nil && err.Error() == "invalid":
+			p.send(map[string]any{"t": "toast", "key": "accInvalid", "vars": map[string]string{"name": ""}})
+		case err != nil:
+			p.send(map[string]any{"t": "toast", "key": "accSwitchFailed", "vars": map[string]string{"error": err.Error()}})
+		default:
+			p.send(map[string]any{"t": "toast", "key": "accSwitched", "vars": map[string]string{"name": email}})
+		}
+		sendAll(map[string]any{"t": "accounts", "list": accountsForPhone()})
+		pushState()
+	case "accForget":
+		forgetAccount(str(c, "id"))
+		p.send(map[string]any{"t": "accounts", "list": accountsForPhone()})
+	case "accAdd":
+		if err := addAccount(); err != nil {
+			p.send(map[string]any{"t": "toast", "key": "accSwitchFailed", "vars": map[string]string{"error": err.Error()}})
+		} else {
+			p.send(map[string]any{"t": "toast", "key": "accAddHint"})
+		}
 	case "popts":
 		sendPlayerOptions(p)
 	case "pset":

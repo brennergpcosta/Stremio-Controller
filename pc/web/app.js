@@ -46,7 +46,13 @@ const OWN = {
     lostText: "Confira se o PC está ligado e o Stremio Controller está aberto (ícone perto do relógio), se o celular está no mesmo Wi-Fi do PC e se o endereço do PC não mudou: se mudou, leia o QR code de novo.",
     closedTitle: "Stremio fechado no PC", closedText: "Abra o Stremio no PC, ou abra daqui:",
     updatedText: "O programa do PC foi atualizado. Ele já está voltando sozinho, espere alguns segundos.",
-    scanQr: "Ler QR code"
+    scanQr: "Ler QR code",
+    accounts: "Contas", accAdd: "Adicionar conta", accCurrent: "Aberta no PC", accRelogin: "Entre de novo no Stremio",
+    accHint: "As contas ficam salvas só no PC, criptografadas. \"Adicionar conta\" abre a tela de entrar do Stremio no PC.",
+    accSwitching: "Trocando de conta no PC…", accSwitched: "Conta trocada: {{name}}",
+    accInvalid: "A sessão dessa conta não vale mais: entre de novo no Stremio, no PC",
+    accSwitchFailed: "Não deu para trocar: {{error}}", accAddHint: "Entre com a outra conta no Stremio, no PC. Ela fica salva aqui sozinha.",
+    accForget: "Esquecer", accForgetAsk: "Esquecer {{name}} neste PC?", accNone: "Nenhuma conta salva ainda"
   },
   en: {
     connecting: "Connecting…", reconnecting: "Reconnecting…", connected: "Connected", disconnected: "Disconnected",
@@ -66,7 +72,13 @@ const OWN = {
     lostText: "Check that the PC is on and Stremio Controller is running (icon next to the clock), that the phone is on the same Wi-Fi as the PC, and that the PC address didn't change: if it did, scan the QR code again.",
     closedTitle: "Stremio is closed on the PC", closedText: "Open Stremio on the PC, or open it from here:",
     updatedText: "The PC program was updated. It is coming back by itself, wait a few seconds.",
-    scanQr: "Scan QR code"
+    scanQr: "Scan QR code",
+    accounts: "Accounts", accAdd: "Add account", accCurrent: "Open on the PC", accRelogin: "Log in again in Stremio",
+    accHint: "Accounts are saved only on the PC, encrypted. \"Add account\" opens the Stremio login screen on the PC.",
+    accSwitching: "Switching account on the PC…", accSwitched: "Account switched: {{name}}",
+    accInvalid: "This account's session is no longer valid: log in again in Stremio, on the PC",
+    accSwitchFailed: "Could not switch: {{error}}", accAddHint: "Log in with the other account in Stremio, on the PC. It is saved here automatically.",
+    accForget: "Forget", accForgetAsk: "Forget {{name}} on this PC?", accNone: "No saved accounts yet"
   }
 };
 const I18N_STORE = "strc-i18n";
@@ -338,6 +350,7 @@ function onMessage(m) {
     case "list": onList(m); return;
     case "board": onBoard(m); return;
     case "popts": onPopts(m.data); return;
+    case "accounts": renderAccountsSheet(m.list); return;
     case "catalog": onCatalog(m); return;
     case "meta": onMeta(m); return;
     case "streams": onStreams(m); return;
@@ -1057,6 +1070,59 @@ $("btnNext").addEventListener("click", () => pset("next", 0));
 $("optSheet").addEventListener("click", (e) => { if (e.target === $("optSheet")) $("optSheet").close(); });
 // Com a aba Controle aberta, as opções acompanham o que muda no PC
 setInterval(() => { if (tab === "ctl" && st.player && connected()) send({ c: "popts" }); }, 4000);
+
+// ---------------------------------------------------------------------------------------------
+// Contas do Stremio salvas no PC: tocar no e-mail do topo abre a lista; tocar numa conta troca o
+// Stremio do PC para ela. As sessões ficam no PC (criptografadas); aqui só e-mail e foto.
+// ---------------------------------------------------------------------------------------------
+function renderAccountsSheet(list) {
+  const rows = (Array.isArray(list) ? list : []).map((acc) => {
+    const b = document.createElement("div");
+    b.className = "row acc" + (acc.current ? " hi" : "");
+    const av = document.createElement("span");
+    av.className = "acc-av";
+    const url = safeImg(acc.avatar);
+    if (url) { const im = document.createElement("img"); im.alt = ""; im.src = url; av.append(im); }
+    else av.textContent = (acc.email || "?")[0].toUpperCase();
+    const txt = document.createElement("span");
+    txt.className = "txt";
+    const t = document.createElement("div");
+    t.className = "t";
+    t.textContent = acc.email || "Stremio";
+    txt.append(t);
+    if (acc.current || acc.invalid) {
+      const c = document.createElement("div");
+      c.className = acc.invalid ? "acc-bad" : "c";
+      c.textContent = T(acc.invalid ? "accRelogin" : "accCurrent");
+      txt.append(c);
+    }
+    const x = document.createElement("button");
+    x.className = "acc-x";
+    x.setAttribute("aria-label", T("accForget"));
+    x.textContent = "×";
+    x.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (confirm(T("accForgetAsk", { name: acc.email }))) send({ c: "accForget", id: acc.id });
+    });
+    b.append(av, txt);
+    if (!acc.current) b.append(x);
+    b.addEventListener("click", () => {
+      if (acc.current) return;
+      if (send({ c: "accSwitch", id: acc.id })) $("accSheet").close();
+    });
+    return b;
+  });
+  $("accBody").replaceChildren(...(rows.length ? rows : [emptyEl(T("accNone"))]));
+}
+
+$("profile").addEventListener("click", () => {
+  if (!connected() || !st.stremio) return;
+  $("accBody").replaceChildren(spinner());
+  if (!$("accSheet").open) $("accSheet").showModal();
+  send({ c: "accounts" });
+});
+$("accAdd").addEventListener("click", () => { if (send({ c: "accAdd" })) $("accSheet").close(); });
+$("accSheet").addEventListener("click", (e) => { if (e.target === $("accSheet")) $("accSheet").close(); });
 
 // ---------------------------------------------------------------------------------------------
 let toastTimer = 0;

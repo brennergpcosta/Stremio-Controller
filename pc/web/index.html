@@ -18,7 +18,7 @@
     <img src="icons/icon-192.png" alt="" class="logo">
     <div class="brand-box">
       <span class="brand">Stremio Controle <span class="ver" id="pcVer" hidden></span></span>
-      <span class="profile" id="profile">…</span>
+      <button class="profile" id="profile">…</button>
     </div>
     <button class="conn" id="conn" data-state="off"><span class="dot"></span><span id="connText"></span></button>
   </header>
@@ -138,6 +138,15 @@
       </div>
     </div>
     <div class="sheet-body" id="sheetBody"></div>
+  </dialog>
+
+  <!-- Contas do Stremio salvas no PC -->
+  <dialog class="sheet" id="accSheet" aria-label="Contas">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h2 class="opt-h" data-i18n="accounts"></h2>
+    <div class="sheet-body" id="accBody"></div>
+    <button class="btn acc-add" id="accAdd" data-i18n="accAdd"></button>
+    <p class="acc-hint" data-i18n="accHint"></p>
   </dialog>
 
   <!-- Legendas e áudio -->
