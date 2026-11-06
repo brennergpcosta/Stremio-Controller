@@ -101,6 +101,7 @@ func watchStremio() {
 				}
 				cancel()
 				s.email = pr.Email
+				setEmail(p.name, pr.Email)
 				stMu.Lock()
 				cur = s
 				stMu.Unlock()
@@ -122,18 +123,24 @@ func watchStremio() {
 
 // Abre um perfil do Stremio (pedido do celular)
 func openProfile(p string) string {
+	name := func(p string) string {
+		if e := getConfig().Emails[p]; e != "" {
+			return e
+		}
+		return "Stremio " + p
+	}
 	if s := current(); s != nil {
 		if s.profile == p {
-			return "O perfil " + p + " já está aberto"
+			return name(p) + " já está aberto"
 		}
-		return "Feche o perfil " + s.profile + " no PC antes (só um Stremio abre por vez)"
+		return "Feche " + name(s.profile) + " no PC antes (só um Stremio abre por vez)"
 	}
 	exe := profileExe(p)
 	if exe == "" {
-		return "Caminho do perfil " + p + " não configurado no PC (config.json)"
+		return "Caminho de " + name(p) + " não configurado no PC (config.json)"
 	}
 	if _, err := os.Stat(exe); err != nil {
-		return "Não achei o Stremio do perfil " + p + " no PC"
+		return "Não achei o " + name(p) + " no PC"
 	}
 	cmd := exec.Command(exe)
 	cmd.Dir = dirOf(exe)
@@ -141,7 +148,7 @@ func openProfile(p string) string {
 		return "Não deu para abrir: " + err.Error()
 	}
 	go cmd.Wait()
-	return "Abrindo o perfil " + p + " no PC…"
+	return "Abrindo " + name(p) + " no PC…"
 }
 
 func dirOf(p string) string {

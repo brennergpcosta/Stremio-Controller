@@ -37,7 +37,7 @@ func pushState() {
 	}
 	pushMu.Lock()
 	defer pushMu.Unlock()
-	msg := map[string]any{"t": "state", "ver": version, "stremio": nil, "player": nil}
+	msg := map[string]any{"t": "state", "ver": version, "stremio": nil, "player": nil, "accounts": accounts()}
 	if s := current(); s != nil {
 		msg["stremio"] = map[string]any{"profile": s.profile, "email": s.email}
 		if p := readPlayer(); p != nil {

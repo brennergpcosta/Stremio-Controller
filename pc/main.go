@@ -75,7 +75,10 @@ func updateTray() {
 	defer trayMu.Unlock()
 	status := "Stremio fechado"
 	if s := current(); s != nil {
-		status = "Stremio aberto: perfil " + s.profile
+		status = "Stremio aberto: " + s.email
+		if s.email == "" {
+			status = "Stremio aberto"
+		}
 	}
 	mStatus.SetTitle(status)
 	ph := openPeers()

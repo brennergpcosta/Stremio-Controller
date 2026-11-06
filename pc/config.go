@@ -11,9 +11,10 @@ import (
 
 // Configuração local, fora do repositório: %APPDATA%\Stremio-Controller\config.json
 type Config struct {
-	Key      string `json:"key"`     // chave do pareamento (vai no QR code)
-	ProfileA string `json:"perfilA"` // caminho do stremio-shell-ng.exe do perfil A (vazio: instalação padrão)
-	ProfileB string `json:"perfilB"` // caminho do .exe do perfil B (porta 9223)
+	Key      string            `json:"key"`              // chave do pareamento (vai no QR code)
+	ProfileA string            `json:"perfilA"`          // caminho do stremio-shell-ng.exe do perfil A (vazio: instalação padrão)
+	ProfileB string            `json:"perfilB"`          // caminho do .exe do perfil B (porta 9223)
+	Emails   map[string]string `json:"contas,omitempty"` // e-mail da conta de cada perfil (o celular mostra no lugar de "perfil A/B")
 }
 
 var (
@@ -83,4 +84,38 @@ func profileExe(p string) string {
 		return c.ProfileB
 	}
 	return ""
+}
+
+// Guarda o e-mail da conta aberta em cada perfil (só neste PC)
+func setEmail(p, email string) {
+	if email == "" {
+		return
+	}
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
+	if cfg.Emails == nil {
+		cfg.Emails = map[string]string{}
+	}
+	if cfg.Emails[p] == email {
+		return
+	}
+	cfg.Emails[p] = email
+	saveConfigLocked()
+}
+
+// Perfis que dá para abrir pelo celular, com o e-mail da conta (se já visto)
+func accounts() []map[string]string {
+	c := getConfig()
+	var out []map[string]string
+	for _, p := range []string{"A", "B"} {
+		exe := profileExe(p)
+		if exe == "" {
+			continue
+		}
+		if _, err := os.Stat(exe); err != nil {
+			continue
+		}
+		out = append(out, map[string]string{"p": p, "email": c.Emails[p]})
+	}
+	return out
 }

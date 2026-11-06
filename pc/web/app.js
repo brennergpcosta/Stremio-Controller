@@ -260,12 +260,29 @@ function showVersion(ver) {
 function render() {
   const s = st.stremio;
   const on = connected();
-  $("profile").textContent = !on ? "" : s ? `Perfil ${s.profile}${s.email ? ` · ${s.email}` : ""}` : "Stremio fechado";
+  $("profile").textContent = !on ? "" : s ? s.email || "Stremio" : "Stremio fechado";
+  renderAccounts();
   $("closedView").hidden = !on || !!s || denied;
   $("mainView").hidden = !on || !s || denied;
   $("tabs").hidden = !on || !s || denied;
   if (on) $("lostView").hidden = true;
   renderPlayer();
+}
+
+// Stremio fechado: um botão por conta (perfil) que dá para abrir no PC, com o e-mail dela
+let accountsKey = "";
+function renderAccounts() {
+  const list = Array.isArray(st.accounts) ? st.accounts : [];
+  const key = JSON.stringify(list);
+  if (key === accountsKey) return;
+  accountsKey = key;
+  $("closedBtns").replaceChildren(...list.map((acc) => {
+    const b = document.createElement("button");
+    b.className = "btn";
+    b.dataset.open = acc.p;
+    b.textContent = acc.email || "Stremio";
+    return b;
+  }));
 }
 
 function renderPlayer() {
@@ -639,7 +656,7 @@ $("btnFs").addEventListener("click", () => {
 
 $("closedView").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-open]");
-  if (b && send({ c: "open", p: b.dataset.open })) toast(`Abrindo o perfil ${b.dataset.open} no PC…`);
+  if (b) send({ c: "open", p: b.dataset.open }); // o PC responde com o aviso
 });
 
 // ---------------------------------------------------------------------------------------------
