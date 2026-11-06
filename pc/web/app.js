@@ -565,7 +565,7 @@ function openDetail(it) {
 $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").close(); });
 $("sheet").addEventListener("close", () => { detail = null; streamsFor = ""; });
 
-function rowEl({ title, sub, img, hi, seen, onTap }) {
+function rowEl({ title, sub, img, hi, onTap }) {
   const b = document.createElement("button");
   b.className = "row" + (hi ? " hi" : "");
   if (img !== undefined) {
@@ -587,13 +587,62 @@ function rowEl({ title, sub, img, hi, seen, onTap }) {
     c.textContent = sub;
     txt.append(c);
   }
-  if (seen) {
-    const s = document.createElement("div");
-    s.className = "seen";
-    s.textContent = T("WATCHED");
-    txt.append(s);
-  }
   b.append(txt);
+  b.addEventListener("click", onTap);
+  return b;
+}
+
+// Episódio como no Stremio: miniatura com a barra de progresso, título, data de lançamento e as
+// marcas ASSISTIDO (amarela) e EM BREVE (verde), com os textos do próprio Stremio
+function epRowEl(v, onTap) {
+  const b = document.createElement("button");
+  b.className = "row ep" + (v.id === detail.videoId ? " hi" : "");
+  const th = document.createElement("span");
+  th.className = "ep-thumb";
+  const im = document.createElement("img");
+  im.alt = "";
+  im.loading = "lazy";
+  im.src = safeImg(v.thumbnail);
+  th.append(im);
+  if (v.progress > 0 && !v.upcoming) {
+    const bar = document.createElement("span");
+    bar.className = "ep-bar";
+    const fill = document.createElement("i");
+    fill.style.width = `${Math.min(100, v.progress)}%`;
+    bar.append(fill);
+    th.append(bar);
+  }
+  const txt = document.createElement("span");
+  txt.className = "txt";
+  const t = document.createElement("div");
+  t.className = "t";
+  t.textContent = `${v.episode}. ${v.title || `${T("EPISODE")} ${v.episode}`}`;
+  txt.append(t);
+  const meta = document.createElement("div");
+  meta.className = "ep-meta";
+  if (v.released) {
+    const d = new Date(v.released);
+    if (!isNaN(d)) {
+      const s = document.createElement("span");
+      s.className = "ep-date";
+      s.textContent = d.toLocaleDateString(loc(), { day: "numeric", month: "short", year: "numeric" });
+      meta.append(s);
+    }
+  }
+  if (v.watched) {
+    const s = document.createElement("span");
+    s.className = "tag watched";
+    s.textContent = T("WATCHED");
+    meta.append(s);
+  }
+  if (v.upcoming) {
+    const s = document.createElement("span");
+    s.className = "tag upcoming";
+    s.textContent = T("UPCOMING");
+    meta.append(s);
+  }
+  txt.append(meta);
+  b.append(th, txt);
   b.addEventListener("click", onTap);
   return b;
 }
@@ -635,16 +684,7 @@ function renderEpisodes() {
   }
   const eps = videos.filter((v) => v.season === detail.season).sort((a, b) => a.episode - b.episode);
   if (!eps.length) body.push(emptyEl(T("noEpisodes")));
-  for (const v of eps) {
-    const date = v.released ? new Date(v.released) : null;
-    const future = date && date > new Date();
-    body.push(rowEl({
-      title: `${v.episode}. ${v.title || `${T("EPISODE")} ${v.episode}`}`,
-      sub: future ? `${T("UPCOMING")} · ${date.toLocaleDateString(loc())}` : "",
-      img: v.thumbnail, hi: v.id === detail.videoId, seen: v.watched,
-      onTap: () => askStreams(v.id, `${meta.name} ${epLabel(v)}`)
-    }));
-  }
+  for (const v of eps) body.push(epRowEl(v, () => askStreams(v.id, `${meta.name} ${epLabel(v)}`)));
   $("sheetBody").replaceChildren(...body);
   $("sheetBody").querySelector(".seasons .on")?.scrollIntoView({ inline: "center", block: "nearest" });
 }

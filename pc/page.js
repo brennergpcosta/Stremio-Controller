@@ -105,7 +105,37 @@
     return out.slice(0, 60);
   };
 
+  // Dados do título com o que o próprio Stremio calcula por episódio (assistido, progresso, lançamento):
+  // carrega o modelo meta_details no core. Só quando o PC não está numa tela de detalhes (ela usa esse
+  // modelo e mudaria); aí busca direto no addon, sem essas marcas.
+  const metaFromCore = async (type, id) => {
+    if (location.hash.startsWith("#/detail")) return null;
+    core.dispatch({ action: "Load", args: { model: "MetaDetails", args: { metaPath: { resource: "meta", type, id, extra: [] }, streamPath: null, guessStream: false } } }, "meta_details");
+    for (let i = 0; i < 60; i++) {
+      const md = await core.getState("meta_details");
+      const sel = md.selected && md.selected.metaPath;
+      const c = md.metaItem && md.metaItem.content;
+      if (sel && sel.id === id && c && c.type === "Ready") return c.content;
+      if (sel && sel.id === id && c && c.type === "Err") return null;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return null;
+  };
+  const shapeMeta = (m) => ({
+    name: m.name, poster: m.poster || "", background: m.background || "", year: m.releaseInfo || m.year || "",
+    videos: (m.videos || []).filter((v) => v.season != null).map((v) => ({
+      id: v.id, season: Number(v.season) || 0, episode: Number(v.episode ?? v.number) || 0,
+      title: v.title || v.name || "", thumbnail: v.thumbnail || "", released: v.released || "",
+      watched: !!v.watched, progress: typeof v.progress === "number" ? Math.round(v.progress * 10) / 10 : 0,
+      upcoming: !!v.upcoming
+    }))
+  });
+
   S.meta = async (type, id) => {
+    try {
+      const m = await metaFromCore(type, id);
+      if (m) return shapeMeta(m);
+    } catch (e) {}
     const list = await addons();
     const cands = list.filter((a) => res(a, "meta", type, id));
     cands.sort((a, b) => (b.manifest.id === "com.linvo.cinemeta") - (a.manifest.id === "com.linvo.cinemeta"));
@@ -114,13 +144,10 @@
       try {
         const m = (await getJson(`${base(a.transportUrl)}/meta/${type}/${encodeURIComponent(id)}.json`)).meta;
         if (!m) continue;
-        return {
-          name: m.name, poster: m.poster || "", year: m.releaseInfo || m.year || "",
-          videos: (m.videos || []).filter((v) => v.season != null).map((v) => ({
-            id: v.id, season: Number(v.season) || 0, episode: Number(v.episode ?? v.number) || 0,
-            title: v.name || v.title || "", thumbnail: v.thumbnail || "", released: v.released || ""
-          }))
-        };
+        const out = shapeMeta(m);
+        const now = Date.now();
+        for (const v of out.videos) v.upcoming = !!v.released && new Date(v.released).getTime() > now;
+        return out;
       } catch (e) { err = String(e.message || e); }
     }
     throw new Error(err);
