@@ -34,23 +34,26 @@
 
   // Traduções do próprio Stremio: o i18next que a interface dele usa (getI18n do react-i18next), no
   // idioma escolhido nele. Acha o módulo pelo código (o react-i18next já está carregado pela página).
-  let i18nObj = null;
-  const i18n = () => {
-    if (i18nObj) return i18nObj;
-    let req = null;
-    try { window.webpackChunkstremio.push([[Symbol("strc")], {}, (r) => { req = r; }]); } catch (e) {}
-    if (!req) return null;
-    for (const id of Object.keys(req.m)) {
+  // Módulos da página (webpack): acha pelo código, porque os números mudam a cada versão do Stremio.
+  let wpReq = null;
+  const findModule = (test, pick) => {
+    if (!wpReq) try { window.webpackChunkstremio.push([[Symbol("strc")], {}, (r) => { wpReq = r; }]); } catch (e) {}
+    if (!wpReq) return null;
+    for (const id of Object.keys(wpReq.m)) {
       let src = "";
-      try { src = String(req.m[id]); } catch (e) { continue; }
-      if (!src.includes("initReactI18next") || !src.includes("getI18n")) continue;
+      try { src = String(wpReq.m[id]); } catch (e) { continue; }
+      if (!test(src)) continue;
       try {
-        const v = req(id).getI18n();
-        if (v && typeof v.t === "function") { i18nObj = v; return v; }
+        const v = pick(wpReq(id));
+        if (v) return v;
       } catch (e) {}
     }
     return null;
   };
+  let i18nObj = null;
+  const i18n = () => i18nObj || (i18nObj = findModule(
+    (src) => src.includes("initReactI18next") && src.includes("getI18n"),
+    (m) => { const v = m.getI18n(); return v && typeof v.t === "function" ? v : null; }));
   S.lang = async () => {
     const v = i18n();
     return (v && (v.resolvedLanguage || v.language)) || (await core.getState("ctx")).profile.settings.interfaceLanguage || "";
@@ -437,6 +440,35 @@
       case "next": P.bar.onNextVideoRequested(); return true;
     }
     throw new Error("opção desconhecida");
+  };
+
+  // Player externo (Configurações > Avançado > "Tocar no player externo"): a mesma lista que a tela
+  // do Stremio mostra, que é a constante EXTERNAL_PLAYERS dele filtrada pela plataforma (no Windows:
+  // Desativado, VLC e Playlist M3U). Vale a partir do próximo vídeo aberto.
+  const extPlayers = () => {
+    const list = findModule((src) => src.includes("EXTERNAL_PLAYERS:["),
+      (m) => [m, m.CONSTANTS, m.default].map((o) => o && o.EXTERNAL_PLAYERS).find(Array.isArray));
+    const plat = findModule((src) => src.includes("supportsViewTransitions") && src.includes("isMobile"),
+      (m) => (typeof m.name === "string" ? m.name : null)) || (/Windows/.test(navigator.userAgent) ? "windows" : "");
+    return (list || []).filter((p) => (p.platforms || []).includes(plat));
+  };
+  S.extPlayer = async () => {
+    const v = i18n();
+    const tr = (k) => (v ? v.t(k, { defaultValue: k }) : k);
+    const cur = (await core.getState("ctx")).profile.settings.playerType ?? null;
+    const opts = extPlayers().map((p) => ({ id: p.value ?? null, name: tr(p.label) }));
+    return { title: tr("SETTINGS_PLAY_IN_EXTERNAL_PLAYER"), cur, opts };
+  };
+  S.extPlayerSet = async (id) => {
+    id = id ?? null;
+    if (!extPlayers().some((p) => (p.value ?? null) === id)) throw new Error("player não oferecido pelo Stremio");
+    const settings = (await core.getState("ctx")).profile.settings;
+    core.dispatch({ action: "Ctx", args: { action: "UpdateSettings", args: { ...settings, playerType: id } } });
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      if (((await core.getState("ctx")).profile.settings.playerType ?? null) === id) return true;
+    }
+    throw new Error("o Stremio não aceitou a mudança");
   };
 
   // ---------------------------------------------------------------------------------------------

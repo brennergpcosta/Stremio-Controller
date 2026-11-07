@@ -214,6 +214,13 @@ func handle(p *peer, c map[string]any) {
 		}
 		time.Sleep(600 * time.Millisecond)
 		sendAll(map[string]any{"t": "hdr", "data": getHdr(true)})
+	case "xplayer":
+		sendExtPlayer(p)
+	case "xplayerSet":
+		if err := callStremio(5*time.Second, "extPlayerSet", nil, c["id"]); err != nil {
+			p.send(map[string]any{"t": "toast", "key": "xplayerFailed", "vars": map[string]string{"error": err.Error()}})
+		}
+		sendAllExtPlayer()
 	case "popts":
 		sendPlayerOptions(p)
 	case "pset":
@@ -286,6 +293,20 @@ func sendPlayerOptions(p *peer) {
 	}
 	p.send(map[string]any{"t": "popts", "data": o})
 }
+
+// Player externo das Configurações do Stremio (lista e escolhido) para a aba Controle do celular
+func readExtPlayer() json.RawMessage {
+	var o json.RawMessage
+	callStremio(5*time.Second, "extPlayer", &o)
+	if o == nil {
+		o = json.RawMessage("null")
+	}
+	return o
+}
+
+func sendExtPlayer(p *peer) { p.send(map[string]any{"t": "xplayer", "data": readExtPlayer()}) }
+
+func sendAllExtPlayer() { sendAll(map[string]any{"t": "xplayer", "data": readExtPlayer()}) }
 
 var inputMu sync.Mutex // teclas e cliques de mais de um celular não se misturam
 

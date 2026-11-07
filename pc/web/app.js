@@ -25,7 +25,7 @@ const STREMIO_KEYS = [
   "TYPE_movie_PL", "TYPE_series_PL", "OFF", "GAMEPAD_ACTION_FULLSCREEN", "PLAYER_MUTE", "PLAYER_UNMUTE",
   "EXIT_FULLSCREEN", "ENTER_FULLSCREEN", "PLAYER_NEXT_VIDEO", "PLAYER_SCALE_FIT", "PLAYER_SCALE_CROP",
   "PLAYER_SCALE_STRETCH", "PLAYER_SCALE_ORIGINAL", "PLAYER_SUBTITLES_LANGUAGES", "PLAYER_SUBTITLES_VARIANTS",
-  "PLAYER_SUBTITLES_SETTINGS", "SETTINGS_ACCOUNT", "LOG_IN", "SEARCH_PLACEHOLDER"
+  "PLAYER_SUBTITLES_SETTINGS", "SETTINGS_ACCOUNT", "LOG_IN", "SEARCH_PLACEHOLDER", "SETTINGS_PLAY_IN_EXTERNAL_PLAYER"
 ];
 const OWN = {
   pt: {
@@ -48,6 +48,7 @@ const OWN = {
     updatedText: "O programa do PC foi atualizado. Ele já está voltando sozinho, espere alguns segundos.",
     scanQr: "Ler QR code",
     hdrSub: "Windows, no monitor do Stremio", hdrFailed: "Não deu para mudar o HDR: {{error}}",
+    xplayerNext: "Vale a partir do próximo vídeo", xplayerFailed: "Não deu para trocar o player: {{error}}",
     accounts: "Contas", accAdd: "Adicionar conta", accCurrent: "Aberta no PC", accRelogin: "Entre de novo no Stremio",
     accHint: "As contas ficam salvas só no PC, criptografadas. \"Adicionar conta\" abre a tela de entrar do Stremio no PC.",
     accSwitching: "Trocando de conta no PC…", accSwitched: "Conta trocada: {{name}}",
@@ -75,6 +76,7 @@ const OWN = {
     updatedText: "The PC program was updated. It is coming back by itself, wait a few seconds.",
     scanQr: "Scan QR code",
     hdrSub: "Windows, on the Stremio monitor", hdrFailed: "Could not change HDR: {{error}}",
+    xplayerNext: "Applies from the next video", xplayerFailed: "Could not change the player: {{error}}",
     accounts: "Accounts", accAdd: "Add account", accCurrent: "Open on the PC", accRelogin: "Log in again in Stremio",
     accHint: "Accounts are saved only on the PC, encrypted. \"Add account\" opens the Stremio login screen on the PC.",
     accSwitching: "Switching account on the PC…", accSwitched: "Account switched: {{name}}",
@@ -353,6 +355,7 @@ function onMessage(m) {
     case "board": onBoard(m); return;
     case "popts": onPopts(m.data); return;
     case "hdr": onHdr(m.data); return;
+    case "xplayer": onXplayer(m.data); return;
     case "accounts": renderAccountsSheet(m.list); return;
     case "catalog": onCatalog(m); return;
     case "meta": onMeta(m); return;
@@ -476,7 +479,7 @@ function showTab(name) {
     send({ c: "list", which: name });
   }
   if (name === "search" && !lastQuery) setTimeout(() => $("searchInput").focus(), 50);
-  if (name === "ctl") { send({ c: "popts" }); send({ c: "hdr" }); }
+  if (name === "ctl") { send({ c: "popts" }); send({ c: "hdr" }); send({ c: "xplayer" }); }
 }
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");
@@ -1069,6 +1072,7 @@ function stepper(label, value, onMinus, onPlus) {
 function renderOptSheet() {
   const o = popts;
   const kind = $("optSheet").dataset.kind;
+  if (kind === "xplayer") { renderXplayerSheet(); return; }
   if (!o) { $("optSheet").close(); return; }
   const body = [];
   if (kind === "audio") {
@@ -1111,6 +1115,7 @@ setInterval(() => {
   if (tab !== "ctl" || !connected()) return;
   if (st.player) send({ c: "popts" });
   send({ c: "hdr" });
+  send({ c: "xplayer" });
 }, 4000);
 
 // HDR do Windows (no monitor onde está o Stremio): liga e desliga, com o estado ao vivo
@@ -1133,6 +1138,47 @@ $("hdrRow").addEventListener("click", () => {
   renderHdr();
   hdrHoldUntil = performance.now() + 2500;
   send({ c: "hdrSet", on: hdr.on });
+});
+
+// Player externo (Configurações do Stremio): as opções que o próprio Stremio oferece no PC.
+// Funciona sem nada tocando; a escolha vale a partir do próximo vídeo aberto.
+let xplayer = null;
+let xplayerHoldUntil = 0;
+function onXplayer(d) {
+  if (performance.now() < xplayerHoldUntil) return;
+  xplayer = d && typeof d === "object" && Array.isArray(d.opts) ? d : null;
+  renderXplayer();
+  if ($("optSheet").open && $("optSheet").dataset.kind === "xplayer") renderXplayerSheet();
+}
+function renderXplayer() {
+  const x = xplayer;
+  $("xplayerRow").hidden = !x || x.opts.length < 2 || !st.stremio;
+  if (!x) return;
+  $("xplayerTitle").textContent = cap(x.title || T("SETTINGS_PLAY_IN_EXTERNAL_PLAYER"));
+  const cur = x.opts.find((o) => o.id === x.cur);
+  $("xplayerVal").textContent = cur ? cur.name : String(x.cur ?? "");
+}
+function renderXplayerSheet() {
+  const x = xplayer;
+  if (!x) { $("optSheet").close(); return; }
+  $("optTitle").textContent = cap(x.title || T("SETTINGS_PLAY_IN_EXTERNAL_PLAYER"));
+  const note = document.createElement("div");
+  note.className = "popt-title";
+  note.textContent = T("xplayerNext");
+  const body = x.opts.map((o) => optRow(o.name, "", o.id === x.cur, () => {
+    x.cur = o.id;
+    renderXplayer();
+    renderXplayerSheet();
+    xplayerHoldUntil = performance.now() + 2000;
+    send({ c: "xplayerSet", id: o.id });
+  }));
+  $("optBody").replaceChildren(note, ...body);
+}
+$("xplayerRow").addEventListener("click", () => {
+  if (!xplayer) return;
+  $("optSheet").dataset.kind = "xplayer";
+  renderXplayerSheet();
+  if (!$("optSheet").open) $("optSheet").showModal();
 });
 
 // ---------------------------------------------------------------------------------------------
