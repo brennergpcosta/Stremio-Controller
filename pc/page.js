@@ -242,14 +242,58 @@
     const thumb = document.querySelector('[class*="volume-slider"] [class*="thumb"]');
     const pos = thumb ? parseFloat((thumb.style.marginLeft.match(/[\d.]+/) || [])[0]) : NaN;
     const meta = p.metaItem?.content || p.metaItem || {};
+    const fs = window.innerWidth >= screen.width && window.innerHeight >= screen.height;
+    const B = controlBar();
+    if (B && typeof B.time === "number") {
+      return {
+        title: p.title || meta.name || "", poster: meta.poster || "",
+        time: B.time / 1000, duration: (B.duration || 0) / 1000,
+        paused: !!B.paused, volume: B.muted ? 0 : Math.round(B.volume ?? 100), fs
+      };
+    }
     return {
       title: p.title || meta.name || "",
       poster: meta.poster || "",
       time: secs(tempo), duration: secs(duracao),
       paused: btn("Play") ? true : btn("Pause") ? false : null,
       volume: Number.isNaN(pos) ? null : Math.round(pos * 2),
-      fs: window.innerWidth >= screen.width && window.innerHeight >= screen.height
+      fs
     };
+  };
+
+  // Barra de controle do player (React): as mesmas funções que os botões dela chamam. Sem eventos de
+  // mouse: um clique simulado deixava o "mouse" do Stremio parado em cima dos controles, e aí o
+  // cursor e os controles não sumiam mais.
+  const controlBar = () => {
+    const el = document.querySelector('[class*="control-bar-buttons-container"]');
+    if (!el) return null;
+    const fk = Object.keys(el).find((k) => k.startsWith("__reactFiber"));
+    let f = fk && el[fk];
+    for (let i = 0; f && i < 40; i++, f = f.return) {
+      const p = f.memoizedProps;
+      if (p && typeof p === "object" && "onSeekRequested" in p && "onVolumeChangeRequested" in p) return p;
+    }
+    return null;
+  };
+  // Comandos do player: tocar/pausar, ±segundos, ir para um tempo, volume (0 a 200)
+  S.ctl = (what, value) => {
+    const B = controlBar();
+    if (!B) throw new Error("nada tocando");
+    const n = Number(value) || 0;
+    const dur = B.duration || 0;
+    const clampMs = (ms) => Math.max(0, dur ? Math.min(dur - 1000, ms) : ms);
+    switch (what) {
+      case "toggle": (B.paused ? B.onPlayRequested : B.onPauseRequested)(); return true;
+      case "skip": B.onSeekRequested(clampMs((B.time || 0) + n * 1000)); return true;
+      case "seek": B.onSeekRequested(clampMs(n * 1000)); return true;
+      case "volume": {
+        const v = Math.max(0, Math.min(200, Math.round(n)));
+        if (B.muted && v > 0) B.onUnmuteRequested();
+        B.onVolumeChangeRequested(v);
+        return true;
+      }
+    }
+    throw new Error("comando desconhecido");
   };
 
   // ---------------------------------------------------------------------------------------------
@@ -463,15 +507,5 @@
   };
 
   // Ponto (x, y) da página para clicar numa barra (seek ou volume) na fração f
-  S.sliderPoint = (which, f) => {
-    const el = which === "seek"
-      ? document.querySelector('[class*="seek-bar-container"] [class*="slider-container"]')
-      : document.querySelector('[class*="volume-slider"]');
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    if (!r.width) return null;
-    return { x: r.left + Math.max(0, Math.min(1, f)) * r.width, y: r.top + r.height / 2 };
-  };
-
   window.__strc = S;
 })();

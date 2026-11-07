@@ -198,17 +198,3 @@ func (c *cdp) key(ctx context.Context, key, code string, vk int) error {
 	_, err := c.call(ctx, "Input.dispatchKeyEvent", up)
 	return err
 }
-
-// Clique do mouse num ponto da página
-func (c *cdp) click(ctx context.Context, x, y float64) error {
-	for _, ev := range []map[string]any{
-		{"type": "mouseMoved", "x": x, "y": y},
-		{"type": "mousePressed", "x": x, "y": y, "button": "left", "buttons": 1, "clickCount": 1},
-		{"type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0, "clickCount": 1},
-	} {
-		if _, err := c.call(ctx, "Input.dispatchMouseEvent", ev); err != nil {
-			return err
-		}
-	}
-	return nil
-}

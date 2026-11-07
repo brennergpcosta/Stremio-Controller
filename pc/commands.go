@@ -250,21 +250,13 @@ func handle(p *peer, c map[string]any) {
 		time.Sleep(1500 * time.Millisecond)
 		pushState()
 	case "toggle":
-		playerKey(p, " ", "Space", 32)
+		playerCtl(p, "toggle", 0)
 	case "skip":
-		if num(c, "by") >= 0 {
-			playerKey(p, "ArrowRight", "ArrowRight", 39)
-		} else {
-			playerKey(p, "ArrowLeft", "ArrowLeft", 37)
-		}
+		playerCtl(p, "skip", num(c, "by"))
 	case "seek":
-		pl := readPlayer()
-		if pl == nil || pl.Duration <= 0 {
-			return
-		}
-		slider(p, "seek", num(c, "time")/pl.Duration)
+		playerCtl(p, "seek", num(c, "time"))
 	case "volume":
-		slider(p, "volume", math.Max(0, math.Min(200, num(c, "level")))/200)
+		playerCtl(p, "volume", math.Max(0, math.Min(200, num(c, "level"))))
 	case "fs":
 		want, _ := c["on"].(bool)
 		if pl := readPlayer(); pl != nil && pl.Fs != want {
@@ -307,22 +299,20 @@ func playerKey(p *peer, key, code string, vk int) {
 	pushState()
 }
 
-func slider(p *peer, which string, f float64) {
+// Comandos do player pelas funções da barra de controle do Stremio (sem mouse simulado, que deixava
+// o cursor e os controles presos na tela)
+func playerCtl(p *peer, what string, value float64) {
 	inputMu.Lock()
 	defer inputMu.Unlock()
-	s := current()
-	if s == nil {
+	if current() == nil {
+		p.send(map[string]any{"t": "toast", "key": "stremioClosed"})
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	var pt *struct{ X, Y float64 }
-	if err := s.run(ctx, "sliderPoint", &pt, which, f); err != nil || pt == nil {
+	if err := callStremio(3*time.Second, "ctl", nil, what, value); err != nil {
 		p.send(map[string]any{"t": "toast", "key": "nothingPlaying"})
 		return
 	}
-	s.c.click(ctx, pt.X, pt.Y)
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 	pushState()
 }
 
