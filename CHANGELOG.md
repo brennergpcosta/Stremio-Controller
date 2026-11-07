@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0 - 2026-11-07
+
+- Player externo pelo celular: na aba Controle, a opção "Tocar no player externo" das Configurações do Stremio, com as mesmas opções que o Stremio oferece no PC (no Windows: Desativado, VLC e Playlist M3U). Funciona sem nada tocando e vale a partir do próximo vídeo aberto.
+
 ## 1.3.0 - 2026-11-07
 
 - HDR do Windows pelo celular: na aba Controle, liga e desliga o HDR do monitor onde está o Stremio, com o estado ao vivo (só aparece se o monitor tiver HDR).
