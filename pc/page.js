@@ -179,10 +179,58 @@
     }))
   });
 
+  // Episódios assistidos guardados pelo próprio Stremio no item da biblioteca (state.watched):
+  // "id do último vídeo:quantidade:bits comprimidos (zlib, base64)", um bit por vídeo na ordem dos
+  // vídeos do título, alinhado pelo último vídeo (como a biblioteca watched-bitfield do Stremio).
+  // Serve quando o core não pode calcular (PC numa tela de detalhes) e para completar o do core.
+  const libRecord = (id) => {
+    for (const k of ["library_recent", "library"]) {
+      try {
+        const j = JSON.parse(localStorage.getItem(k) || "null");
+        const it = j && j.items && j.items[id];
+        if (it) return it;
+      } catch (e) {}
+    }
+    return null;
+  };
+  const watchedIds = async (watched, ids) => {
+    const out = new Set();
+    if (typeof watched !== "string" || !watched) return out;
+    const a = watched.lastIndexOf(":");
+    const b = watched.lastIndexOf(":", a - 1);
+    if (a < 0 || b < 0) return out;
+    const anchor = watched.slice(0, b);
+    const anchorLen = Number(watched.slice(b + 1, a));
+    const bin = Uint8Array.from(atob(watched.slice(a + 1)), (c) => c.charCodeAt(0));
+    const bytes = new Uint8Array(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer());
+    const idx = ids.indexOf(anchor);
+    const offset = idx < 0 || !anchorLen ? 0 : anchorLen - 1 - idx;
+    ids.forEach((vid, i) => {
+      const j = i + offset;
+      if (j >= 0 && j < bytes.length * 8 && (bytes[j >> 3] >> (j & 7)) & 1) out.add(vid);
+    });
+    return out;
+  };
+  const addLibraryWatched = async (out, id, rawVideos) => {
+    const rec = libRecord(id);
+    const st = rec && rec.state;
+    if (!st) return out;
+    try {
+      const set = await watchedIds(st.watched, (rawVideos || []).map((v) => v.id));
+      for (const v of out.videos) if (set.has(v.id)) v.watched = true;
+    } catch (e) {}
+    // Episódio em andamento: progresso como no Stremio
+    if (st.video_id && st.duration > 0 && st.timeOffset > 0) {
+      const v = out.videos.find((x) => x.id === st.video_id);
+      if (v && !v.progress) v.progress = Math.round(Math.min(100, (st.timeOffset / st.duration) * 100) * 10) / 10;
+    }
+    return out;
+  };
+
   S.meta = async (type, id) => {
     try {
       const m = await metaFromCore(type, id);
-      if (m) return shapeMeta(m);
+      if (m) return await addLibraryWatched(shapeMeta(m), id, m.videos);
     } catch (e) {}
     const list = await addons();
     const cands = list.filter((a) => res(a, "meta", type, id));
@@ -195,7 +243,7 @@
         const out = shapeMeta(m);
         const now = Date.now();
         for (const v of out.videos) v.upcoming = !!v.released && new Date(v.released).getTime() > now;
-        return out;
+        return await addLibraryWatched(out, id, m.videos);
       } catch (e) { err = String(e.message || e); }
     }
     throw new Error(err);
