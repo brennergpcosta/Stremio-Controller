@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 - 2026-11-07
+
+- HDR do Windows pelo celular: na aba Controle, liga e desliga o HDR do monitor onde está o Stremio, com o estado ao vivo (só aparece se o monitor tiver HDR).
+- Conserto: depois de mudar o volume ou a posição pelo celular, o cursor e os controles do player não sumiam mais. Agora os comandos usam as funções do próprio player do Stremio, sem mouse simulado.
+- Conserto: episódios assistidos às vezes não apareciam como assistidos no celular. Agora o PC também lê o registro de assistidos que o Stremio guarda na biblioteca.
+
 ## 1.2.1 - 2026-11-06
 
 - Velocidade no celular igual à do player do Stremio: valor atual, slider de 0,1x a 4x e os atalhos 0,5x, 1x, 1,25x, 1,5x, 1,75x, 2x e 4x.
