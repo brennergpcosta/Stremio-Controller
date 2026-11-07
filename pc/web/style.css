@@ -256,3 +256,13 @@ button.profile::after { content: " ▾"; font-size: 10px; color: var(--text-3); 
 .speed-val { font-weight: 700; font-size: 15px; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
 .speed-box .speeds { justify-content: space-between; margin-top: 10px; }
 .speed-box .speeds button { padding: 5px 9px; font-size: 13px; }
+
+/* HDR do Windows */
+.hdr-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; margin-top: 18px; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 12px; text-align: left; }
+.hdr-l { display: flex; flex-direction: column; min-width: 0; }
+.hdr-l b { font-size: 14px; }
+.hdr-l span { font-size: 12px; color: var(--text-2); }
+.switch { flex: none; position: relative; width: 46px; height: 26px; border-radius: 999px; background: var(--surface-2); transition: background 0.2s ease; }
+.switch i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.2s ease; }
+.switch.on { background: var(--signal); }
+.switch.on i { transform: translateX(20px); }

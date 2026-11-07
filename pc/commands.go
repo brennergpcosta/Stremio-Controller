@@ -205,6 +205,15 @@ func handle(p *peer, c map[string]any) {
 		} else {
 			p.send(map[string]any{"t": "toast", "key": "accAddHint"})
 		}
+	case "hdr":
+		p.send(map[string]any{"t": "hdr", "data": getHdr(false)})
+	case "hdrSet":
+		on, _ := c["on"].(bool)
+		if err := setHdr(on); err != nil {
+			p.send(map[string]any{"t": "toast", "key": "hdrFailed", "vars": map[string]string{"error": err.Error()}})
+		}
+		time.Sleep(600 * time.Millisecond)
+		sendAll(map[string]any{"t": "hdr", "data": getHdr(true)})
 	case "popts":
 		sendPlayerOptions(p)
 	case "pset":

@@ -47,6 +47,7 @@ const OWN = {
     closedTitle: "Stremio fechado no PC", closedText: "Abra o Stremio no PC, ou abra daqui:",
     updatedText: "O programa do PC foi atualizado. Ele já está voltando sozinho, espere alguns segundos.",
     scanQr: "Ler QR code",
+    hdrSub: "Windows, no monitor do Stremio", hdrFailed: "Não deu para mudar o HDR: {{error}}",
     accounts: "Contas", accAdd: "Adicionar conta", accCurrent: "Aberta no PC", accRelogin: "Entre de novo no Stremio",
     accHint: "As contas ficam salvas só no PC, criptografadas. \"Adicionar conta\" abre a tela de entrar do Stremio no PC.",
     accSwitching: "Trocando de conta no PC…", accSwitched: "Conta trocada: {{name}}",
@@ -73,6 +74,7 @@ const OWN = {
     closedTitle: "Stremio is closed on the PC", closedText: "Open Stremio on the PC, or open it from here:",
     updatedText: "The PC program was updated. It is coming back by itself, wait a few seconds.",
     scanQr: "Scan QR code",
+    hdrSub: "Windows, on the Stremio monitor", hdrFailed: "Could not change HDR: {{error}}",
     accounts: "Accounts", accAdd: "Add account", accCurrent: "Open on the PC", accRelogin: "Log in again in Stremio",
     accHint: "Accounts are saved only on the PC, encrypted. \"Add account\" opens the Stremio login screen on the PC.",
     accSwitching: "Switching account on the PC…", accSwitched: "Account switched: {{name}}",
@@ -350,6 +352,7 @@ function onMessage(m) {
     case "list": onList(m); return;
     case "board": onBoard(m); return;
     case "popts": onPopts(m.data); return;
+    case "hdr": onHdr(m.data); return;
     case "accounts": renderAccountsSheet(m.list); return;
     case "catalog": onCatalog(m); return;
     case "meta": onMeta(m); return;
@@ -473,7 +476,7 @@ function showTab(name) {
     send({ c: "list", which: name });
   }
   if (name === "search" && !lastQuery) setTimeout(() => $("searchInput").focus(), 50);
-  if (name === "ctl") send({ c: "popts" });
+  if (name === "ctl") { send({ c: "popts" }); send({ c: "hdr" }); }
 }
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");
@@ -1104,7 +1107,33 @@ $("btnScale").addEventListener("click", () => pset("scale", 0));
 $("btnNext").addEventListener("click", () => pset("next", 0));
 $("optSheet").addEventListener("click", (e) => { if (e.target === $("optSheet")) $("optSheet").close(); });
 // Com a aba Controle aberta, as opções acompanham o que muda no PC
-setInterval(() => { if (tab === "ctl" && st.player && connected()) send({ c: "popts" }); }, 4000);
+setInterval(() => {
+  if (tab !== "ctl" || !connected()) return;
+  if (st.player) send({ c: "popts" });
+  send({ c: "hdr" });
+}, 4000);
+
+// HDR do Windows (no monitor onde está o Stremio): liga e desliga, com o estado ao vivo
+let hdr = null;
+let hdrHoldUntil = 0;
+function onHdr(d) {
+  if (performance.now() < hdrHoldUntil) return;
+  hdr = d && typeof d === "object" ? d : null;
+  renderHdr();
+}
+function renderHdr() {
+  $("hdrRow").hidden = !hdr || !hdr.supported || !st.stremio;
+  if (!hdr) return;
+  $("hdrSwitch").classList.toggle("on", !!hdr.on);
+  $("hdrSwitch").setAttribute("aria-checked", String(!!hdr.on));
+}
+$("hdrRow").addEventListener("click", () => {
+  if (!hdr) return;
+  hdr.on = !hdr.on;
+  renderHdr();
+  hdrHoldUntil = performance.now() + 2500;
+  send({ c: "hdrSet", on: hdr.on });
+});
 
 // ---------------------------------------------------------------------------------------------
 // Contas do Stremio salvas no PC: tocar no e-mail do topo abre a lista; tocar numa conta troca o
