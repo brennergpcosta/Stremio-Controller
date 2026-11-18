@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -300,5 +301,81 @@ func accountsLoop() {
 				last = key
 			}
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// Botão de contas dentro do Stremio do PC (ao lado do botão do QR code)
+// ---------------------------------------------------------------------------------------------
+var accLangPT struct {
+	sync.Mutex
+	pt bool
+}
+
+// Manda a lista de contas e os textos para o botão de contas na barra de cima do Stremio
+func pushAccButton(pt bool) {
+	accLangPT.Lock()
+	accLangPT.pt = pt
+	accLangPT.Unlock()
+	l := map[string]string{
+		"title": "Switch account", "add": "Add account", "current": "Open now", "relogin": "Log in again",
+		"none": "No saved accounts yet", "switching": "Switching account…", "close": "Close",
+		"hint": "Accounts are saved only on this PC, encrypted.",
+	}
+	if pt {
+		l = map[string]string{
+			"title": "Trocar de conta", "add": "Adicionar conta", "current": "Aberta agora", "relogin": "Entre de novo",
+			"none": "Nenhuma conta salva ainda", "switching": "Trocando de conta…", "close": "Fechar",
+			"hint": "As contas ficam salvas só neste PC, criptografadas.",
+		}
+	}
+	// A função __strcSend some quando o Stremio recarrega a página: cria de novo (não duplica)
+	if s := current(); s != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		s.c.call(ctx, "Runtime.addBinding", map[string]any{"name": "__strcSend"})
+		cancel()
+	}
+	callStremio(3*time.Second, "accButton", nil, accountsForPhone(), l)
+}
+
+func refreshAccButton() {
+	accLangPT.Lock()
+	pt := accLangPT.pt
+	accLangPT.Unlock()
+	pushAccButton(pt)
+}
+
+// Pedido vindo do botão de contas dentro do Stremio
+func handlePageReq(payload string) {
+	var r struct {
+		C  string `json:"c"`
+		ID string `json:"id"`
+	}
+	if json.Unmarshal([]byte(payload), &r) != nil {
+		return
+	}
+	switch r.C {
+	case "accSwitch":
+		_, err := switchAccount(r.ID)
+		if err != nil {
+			logf("contas: troca pelo Stremio falhou: %v", err)
+			accLangPT.Lock()
+			pt := accLangPT.pt
+			accLangPT.Unlock()
+			msg := map[bool]string{true: "A sessão dessa conta não vale mais: entre de novo com ela", false: "This account's session is no longer valid: log in with it again"}[pt]
+			if err.Error() != "invalid" {
+				msg = map[bool]string{true: "Não deu para trocar: ", false: "Could not switch: "}[pt] + err.Error()
+			}
+			callStremio(3*time.Second, "accNotice", nil, msg)
+		}
+		sendAll(map[string]any{"t": "accounts", "list": accountsForPhone()})
+		pushState()
+		refreshAccButton()
+	case "accAdd":
+		if err := addAccount(); err != nil {
+			logf("contas: adicionar pelo Stremio falhou: %v", err)
+		}
+	case "accList":
+		refreshAccButton()
 	}
 }

@@ -111,10 +111,12 @@ func qrButtonLoop() {
 		}
 		var lang string
 		callStremio(3*time.Second, "lang", &lang)
+		pt := strings.HasPrefix(strings.ToLower(lang), "pt") || strings.HasPrefix(strings.ToLower(lang), "por")
 		title, text := "Pair your phone", "Scan with the phone camera, on the same Wi-Fi as this PC. Click anywhere to close."
-		if strings.HasPrefix(strings.ToLower(lang), "pt") || strings.HasPrefix(strings.ToLower(lang), "por") {
+		if pt {
 			title, text = "Parear o celular", "Leia com a câmera do celular, no mesmo Wi-Fi deste PC. Clique em qualquer lugar para fechar."
 		}
 		callStremio(3*time.Second, "qrButton", nil, png64, title, text)
+		pushAccButton(pt)
 	}
 }

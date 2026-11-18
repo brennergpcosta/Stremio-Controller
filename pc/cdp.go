@@ -23,6 +23,8 @@ type cdp struct {
 	pending map[int64]chan cdpReply
 	closed  chan struct{}
 	once    sync.Once
+	// Chamado (numa goroutine) quando a página chama uma função criada com Runtime.addBinding
+	onBinding func(name, payload string)
 }
 
 type cdpReply struct {
@@ -76,10 +78,21 @@ func (c *cdp) readLoop() {
 			return
 		}
 		var m struct {
-			ID int64 `json:"id"`
+			ID     int64  `json:"id"`
+			Method string `json:"method"`
+			Params struct {
+				Name    string `json:"name"`
+				Payload string `json:"payload"`
+			} `json:"params"`
 			cdpReply
 		}
-		if json.Unmarshal(data, &m) != nil || m.ID == 0 {
+		if json.Unmarshal(data, &m) != nil {
+			continue
+		}
+		if m.ID == 0 {
+			if m.Method == "Runtime.bindingCalled" && c.onBinding != nil {
+				go c.onBinding(m.Params.Name, m.Params.Payload)
+			}
 			continue
 		}
 		c.pmu.Lock()

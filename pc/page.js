@@ -586,6 +586,155 @@
     return true;
   };
 
+  // ---------------------------------------------------------------------------------------------
+  // Botão de contas na barra de cima do Stremio, ao lado do QR code: lista as contas salvas no PC
+  // e troca com um clique. O pedido vai para o programa do PC por window.__strcSend (Runtime.addBinding).
+  // ---------------------------------------------------------------------------------------------
+  const ACC_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="display:block"><path d="M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.7 0-8 1.34-8 4v2h11.5a6.5 6.5 0 0 1-.4-5.9C10.9 14.04 9.9 14 9 14zm9.5-2.5V10L22 13l-3.5 3v-1.5H14v-2h4.5zm-1 5H22v2h-4.5V20L14 17l3.5-3v1.5z"/></svg>';
+  const accAlive = () => Date.now() - (window.__strcAccAlive || 0) < 20000 && typeof window.__strcSend === "function";
+  const removeAcc = () => {
+    document.querySelectorAll(".strc-acc-btn, #strc-acc-overlay").forEach((e) => e.remove());
+  };
+  const accSend = (m) => { try { window.__strcSend(JSON.stringify(m)); return true; } catch (e) { return false; } };
+  const showAccOverlay = () => {
+    const a = window.__strcAcc;
+    if (!a) return;
+    document.getElementById("strc-acc-overlay")?.remove();
+    const L = a.labels || {};
+    const o = document.createElement("div");
+    o.id = "strc-acc-overlay";
+    o.style.cssText = "position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:rgba(0,0,0,.72);font-family:inherit";
+    const card = document.createElement("div");
+    card.style.cssText = "background:#1b1a27;color:#f1f1f4;border-radius:18px;padding:20px;width:min(420px,92vw);max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5);cursor:default";
+    card.addEventListener("click", (e) => e.stopPropagation());
+    const h = document.createElement("div");
+    h.style.cssText = "font-size:18px;font-weight:600;margin-bottom:14px";
+    h.textContent = L.title || "";
+    card.append(h);
+    const list = Array.isArray(a.list) ? a.list : [];
+    if (!list.length) {
+      const p = document.createElement("div");
+      p.style.cssText = "color:#a9a8b8;font-size:14px;padding:6px 0 10px";
+      p.textContent = L.none || "";
+      card.append(p);
+    }
+    for (const acc of list) {
+      const r = document.createElement("div");
+      const bg = acc.current ? "rgba(123,91,245,.25)" : "rgba(255,255,255,.06)";
+      r.style.cssText = "display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;margin-bottom:6px;background:" + bg + (acc.current ? "" : ";cursor:pointer");
+      const av = document.createElement("div");
+      av.style.cssText = "width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;background:#7b5bf5;color:#fff;font-weight:600;overflow:hidden";
+      const url = typeof acc.avatar === "string" && acc.avatar.startsWith("https://") ? acc.avatar : "";
+      if (url) {
+        const img = document.createElement("img");
+        img.src = url;
+        img.style.cssText = "width:100%;height:100%;object-fit:cover";
+        av.append(img);
+      } else av.textContent = (acc.email || "?")[0].toUpperCase();
+      const t = document.createElement("div");
+      t.style.cssText = "flex:1;min-width:0";
+      const e1 = document.createElement("div");
+      e1.style.cssText = "font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      e1.textContent = acc.email || "Stremio";
+      t.append(e1);
+      if (acc.current || acc.invalid) {
+        const e2 = document.createElement("div");
+        e2.style.cssText = "font-size:12.5px;color:" + (acc.invalid ? "#ffa53d" : "#9d84ff");
+        e2.textContent = acc.invalid ? L.relogin || "" : L.current || "";
+        t.append(e2);
+      }
+      r.append(av, t);
+      if (!acc.current) {
+        r.addEventListener("mouseenter", () => { r.style.background = "rgba(255,255,255,.12)"; });
+        r.addEventListener("mouseleave", () => { r.style.background = bg; });
+        r.addEventListener("click", () => {
+          if (!accSend({ c: "accSwitch", id: acc.id })) return;
+          o.dataset.busy = "1";
+          card.replaceChildren();
+          const w = document.createElement("div");
+          w.style.cssText = "font-size:16px;padding:18px 4px;text-align:center";
+          w.textContent = L.switching || "…";
+          card.append(w);
+        });
+      }
+      card.append(r);
+    }
+    const add = document.createElement("button");
+    add.style.cssText = "width:100%;margin-top:8px;padding:11px;border:0;border-radius:12px;background:#7b5bf5;color:#fff;font:inherit;font-size:15px;font-weight:600;cursor:pointer";
+    add.textContent = L.add || "";
+    const hint = document.createElement("div");
+    hint.style.cssText = "font-size:12.5px;color:#a9a8b8;margin-top:10px;text-align:center";
+    hint.textContent = L.hint || "";
+    card.append(add, hint);
+    o.append(card);
+    const close = () => { o.remove(); document.removeEventListener("keydown", onKey, true); };
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    add.addEventListener("click", () => { if (accSend({ c: "accAdd" })) close(); });
+    o.addEventListener("click", close);
+    document.addEventListener("keydown", onKey, true);
+    document.body.append(o);
+  };
+  S.placeAcc = () => {
+    const a = window.__strcAcc;
+    if (!a || !accAlive()) { removeAcc(); return; }
+    const bars = document.querySelectorAll('[class*="horizontal-nav-bar"] [class*="buttons-container"]');
+    for (const bc of bars) {
+      if (bc.querySelector(".strc-acc-btn")) continue;
+      const sib = bc.querySelector('[class*="button-container"]:not(.strc-qr-btn)');
+      const b = document.createElement("div");
+      b.className = (sib ? sib.className + " " : "") + "strc-acc-btn";
+      b.tabIndex = -1;
+      b.title = (a.labels && a.labels.title) || "";
+      b.style.cssText = "display:flex;align-items:center;justify-content:center;cursor:pointer;color:inherit";
+      b.innerHTML = ACC_ICON;
+      // Mesmo estilo do ícone do botão vizinho (cor e tamanho do tema do Stremio)
+      const sibSvg = sib && sib.querySelector("svg");
+      if (sibSvg && sibSvg.getAttribute("class")) {
+        const svg = b.querySelector("svg");
+        svg.setAttribute("class", sibSvg.getAttribute("class"));
+        svg.removeAttribute("width");
+        svg.removeAttribute("height");
+        svg.style.display = "";
+      }
+      b.addEventListener("click", (e) => { e.stopPropagation(); showAccOverlay(); });
+      const qr = bc.querySelector(".strc-qr-btn");
+      bc.insertBefore(b, qr ? qr.nextSibling : bc.firstChild);
+    }
+  };
+  S.accButton = (list, labels) => {
+    window.__strcAccAlive = Date.now();
+    const old = window.__strcAcc;
+    window.__strcAcc = { list, labels };
+    if (old && JSON.stringify(old.labels) !== JSON.stringify(labels)) {
+      document.querySelectorAll(".strc-acc-btn").forEach((e) => e.remove());
+    }
+    // Lista aberta: mostra a versão nova (menos durante uma troca)
+    const ov = document.getElementById("strc-acc-overlay");
+    if (ov && !ov.dataset.busy && old && JSON.stringify(old) !== JSON.stringify(window.__strcAcc)) showAccOverlay();
+    if (!window.__strcAccWatch) {
+      let pending = false;
+      window.__strcAccWatch = new MutationObserver(() => {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(() => { pending = false; window.__strc?.placeAcc?.(); });
+      });
+      window.__strcAccWatch.observe(document.body, { childList: true, subtree: true });
+      setInterval(() => { if (!accAlive()) removeAcc(); }, 5000);
+    }
+    S.placeAcc();
+    return true;
+  };
+  // Aviso curto por cima do Stremio (ex.: a troca de conta falhou)
+  S.accNotice = (text) => {
+    document.getElementById("strc-acc-overlay")?.remove();
+    const n = document.createElement("div");
+    n.style.cssText = "position:fixed;left:50%;bottom:40px;transform:translateX(-50%);z-index:2147483647;background:#1b1a27;color:#f1f1f4;padding:12px 18px;border-radius:12px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);max-width:80vw";
+    n.textContent = String(text || "");
+    document.body.append(n);
+    setTimeout(() => n.remove(), 6000);
+    return true;
+  };
+
   // Ponto (x, y) da página para clicar numa barra (seek ou volume) na fração f
   window.__strc = S;
 })();

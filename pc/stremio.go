@@ -100,6 +100,18 @@ func watchStremio() {
 					continue
 				}
 				cancel()
+				// Canal da página para o programa: o botão de contas dentro do Stremio chama
+				// window.__strcSend(json) e o pedido chega aqui (a função é recriada em pushAccButton)
+				c.onBinding = func(name, payload string) {
+					if name == "__strcSend" {
+						handlePageReq(payload)
+					}
+				}
+				bctx, bcancel := context.WithTimeout(context.Background(), 3*time.Second)
+				if _, err := c.call(bctx, "Runtime.addBinding", map[string]any{"name": "__strcSend"}); err != nil {
+					note("canal da página falhou: " + err.Error())
+				}
+				bcancel()
 				s.email = pr.Email
 				setEmail(p.name, pr.Email)
 				stMu.Lock()
