@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0 - 2026-11-18
+
+- Trocar de conta no próprio Stremio do PC: um botão novo na barra de cima, ao lado do botão do QR code, mostra as contas salvas neste PC e troca com um clique. Também tem "Adicionar conta".
+- Volume no celular como uma roda deitada: tocar no - ou no + muda de 5 em 5 (segurar repete), e arrastar a roda para os lados gira e muda aos poucos. Tocar na metade esquerda ou direita da roda também diminui ou aumenta.
+
 ## 1.4.0 - 2026-11-07
 
 - Player externo pelo celular: na aba Controle, a opção "Tocar no player externo" das Configurações do Stremio, com as mesmas opções que o Stremio oferece no PC (no Windows: Desativado, VLC e Playlist M3U). Funciona sem nada tocando e vale a partir do próximo vídeo aberto.
