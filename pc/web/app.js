@@ -414,12 +414,8 @@ function renderPlayer() {
   $("btnFs").classList.toggle("on", has && !!p.fs);
   for (const b of document.querySelectorAll(".ctl .ctl-btn")) b.disabled = !has;
   $("seek").disabled = !has;
-  $("vol").disabled = !has;
-  if (has && !volDragging && performance.now() > volHoldUntil && typeof p.volume === "number") {
-    $("vol").value = p.volume;
-    $("volNum").textContent = p.volume;
-    setFill($("vol"));
-  }
+  volEnable(has);
+  if (has && !volDragging && performance.now() > volHoldUntil && typeof p.volume === "number") volFromPc(p.volume);
   $("tDur").textContent = has ? fmt(p.duration) : "0:00";
   $("popts").hidden = !has || !popts;
   $("mini").hidden = !has || tab === "ctl";
@@ -921,21 +917,182 @@ seek.addEventListener("change", () => {
   seeking = false;
 });
 
-const vol = $("vol");
+// ---------------------------------------------------------------------------------------------
+// Volume: roda deitada (0 a 200, como o Stremio). Arrastar para os lados gira a roda; soltar com
+// força deixa ela girar mais um pouco. Os botões - e + mudam de 5 em 5 (segurar repete).
+// ---------------------------------------------------------------------------------------------
+const VOL_DEG = 2.2;       // graus da roda por ponto de volume
+const RIDGE_STEP = 12;     // graus entre ranhuras
+const wheel = $("volWheel");
+const ridges = [];
+for (let i = 0; i < 360 / RIDGE_STEP; i++) ridges.push($("volRidges").appendChild(document.createElement("i")));
+let volVal = 100;          // volume mostrado (pode ter fração durante o arrasto)
+let volShown = -1;
+let volSent = -1;
 let volTimer = 0;
-vol.addEventListener("input", () => {
-  volDragging = true;
-  setFill(vol);
-  $("volNum").textContent = vol.value;
-  clearTimeout(volTimer);
-  volTimer = setTimeout(() => send({ c: "volume", level: Number(vol.value) }), 120);
-});
-vol.addEventListener("change", () => {
-  clearTimeout(volTimer);
-  send({ c: "volume", level: Number(vol.value) });
-  volDragging = false;
+let volAnim = 0;
+
+function drawWheel() {
+  const w = wheel.clientWidth || 200;
+  const r = w / 2 - 2;
+  const rot = volVal * VOL_DEG;
+  for (let i = 0; i < ridges.length; i++) {
+    let a = ((i * RIDGE_STEP - rot) % 360 + 540) % 360 - 180; // -180..180, 0 = de frente
+    const el = ridges[i];
+    if (Math.abs(a) >= 88) { el.style.opacity = "0"; continue; }
+    const rad = a * Math.PI / 180;
+    const c = Math.cos(rad);
+    el.style.opacity = (0.2 + 0.8 * c).toFixed(3);
+    el.style.transform = `translateX(${(Math.sin(rad) * r).toFixed(1)}px) scaleX(${Math.max(0.25, c).toFixed(3)})`;
+  }
+  // Ponto na face de cima: dá a volta junto com a roda
+  const rad = rot * Math.PI / 180;
+  const dot = $("volDot");
+  dot.style.transform = `translate(${(Math.sin(rad) * (r - 14)).toFixed(1)}px, ${(Math.cos(rad) * 7).toFixed(1)}px)`;
+  dot.style.opacity = (0.45 + 0.55 * (Math.cos(rad) + 1) / 2).toFixed(3);
+  const n = Math.round(volVal);
+  if (n !== volShown) {
+    volShown = n;
+    $("volNum").textContent = n;
+    $("volLevel").style.width = (n / 2) + "%";
+    wheel.setAttribute("aria-valuenow", n);
+  }
+}
+
+// Manda para o PC (no máximo a cada 120 ms durante o arrasto) e vibra a cada 5 pontos
+function volSet(v, { now = false } = {}) {
+  const before = Math.round(volVal);
+  volVal = Math.max(0, Math.min(200, v));
+  const n = Math.round(volVal);
+  if (Math.floor(n / 5) !== Math.floor(before / 5) && navigator.vibrate) navigator.vibrate(4);
+  drawWheel();
   volHoldUntil = performance.now() + 2500;
-});
+  if (!st.player) return;
+  st.player.volume = n;
+  const flush = () => { volTimer = 0; if (n !== volSent) { volSent = n; send({ c: "volume", level: n }); } };
+  if (now) { clearTimeout(volTimer); flush(); } else if (!volTimer) volTimer = setTimeout(() => flush(), 120);
+}
+
+// Valor vindo do PC: gira até lá com animação curta
+function volFromPc(v) {
+  volSent = v;
+  if (Math.round(volVal) === v) return;
+  volTo(v, false);
+}
+
+function volTo(target, sendIt) {
+  cancelAnimationFrame(volAnim);
+  const from = volVal;
+  const t0 = performance.now();
+  if (sendIt) volSet(target, { now: true }); // manda já o valor final
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / 180);
+    volVal = from + (target - from) * (1 - Math.pow(1 - k, 3));
+    drawWheel();
+    if (k < 1) volAnim = requestAnimationFrame(step);
+  };
+  volAnim = requestAnimationFrame(step);
+}
+
+function volEnable(on) {
+  wheel.classList.toggle("off", !on);
+  $("volDown").disabled = !on;
+  $("volUp").disabled = !on;
+}
+
+// Arrastar
+{
+  let lastX = 0, lastT = 0, speed = 0, moved = 0, pid = null;
+  const end = () => {
+    if (pid === null) return;
+    pid = null;
+    wheel.classList.remove("drag");
+    // Soltou com força: continua girando e vai parando
+    if (Math.abs(speed) > 0.04 && moved > 6) {
+      let v = Math.max(-0.12, Math.min(0.12, speed)) * 16; // no máximo uns 20 pontos a mais
+      let prev = performance.now();
+      const glide = (t) => {
+        const dt = Math.min(48, t - prev);
+        prev = t;
+        v *= Math.pow(0.9, dt / 16);
+        volSet(volVal + v * dt / 16);
+        if (Math.abs(v) > 0.05 && volVal > 0 && volVal < 200 && !volDragging) volAnim = requestAnimationFrame(glide);
+        else volSet(Math.round(volVal), { now: true });
+      };
+      volAnim = requestAnimationFrame(glide);
+    } else volSet(Math.round(volVal), { now: true });
+    volDragging = false;
+  };
+  wheel.addEventListener("pointerdown", (e) => {
+    if (!st.player) return;
+    cancelAnimationFrame(volAnim);
+    pid = e.pointerId;
+    lastX = e.clientX;
+    lastT = performance.now();
+    speed = 0;
+    moved = 0;
+    wheel.classList.add("drag");
+    volDragging = true;
+    try { wheel.setPointerCapture(pid); } catch (err) {}
+  });
+  wheel.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== pid) return;
+    const dx = e.clientX - lastX;
+    const t = performance.now();
+    lastX = e.clientX;
+    moved += Math.abs(dx);
+    // A borda da roda anda junto com o dedo: dx pixels = dx / raio radianos
+    const r = Math.max(40, wheel.clientWidth / 2);
+    const dv = (dx / r) * (180 / Math.PI) / VOL_DEG;
+    const dt = Math.max(1, t - lastT);
+    lastT = t;
+    speed = 0.7 * speed + 0.3 * (dv / dt);
+    volSet(volVal + dv);
+  });
+  wheel.addEventListener("pointerup", (e) => {
+    // Toque sem arrastar: metade esquerda diminui, direita aumenta
+    if (e.pointerId === pid && moved < 6) {
+      const b = wheel.getBoundingClientRect();
+      pid = null;
+      wheel.classList.remove("drag");
+      volDragging = false;
+      volStep(e.clientX < b.left + b.width / 2 ? -5 : 5);
+      return;
+    }
+    end();
+  });
+  wheel.addEventListener("pointercancel", end);
+  wheel.addEventListener("lostpointercapture", end);
+  wheel.addEventListener("keydown", (e) => {
+    const d = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5 }[e.key];
+    if (d) { e.preventDefault(); volStep(d); }
+  });
+}
+
+function volStep(d) {
+  if (!st.player) return;
+  const base = d < 0 ? Math.ceil(volVal / 5 - 0.01) * 5 : Math.floor(volVal / 5 + 0.01) * 5;
+  const target = Math.max(0, Math.min(200, base + d));
+  if (navigator.vibrate) navigator.vibrate(6);
+  volTo(target, true);
+}
+
+// Botões - e +: tocar muda 5; segurar repete
+for (const [id, d] of [["volDown", -5], ["volUp", 5]]) {
+  const b = $(id);
+  let hold = 0, rep = 0;
+  const stop = () => { clearTimeout(hold); clearInterval(rep); };
+  b.addEventListener("pointerdown", (e) => {
+    if (b.disabled) return;
+    e.preventDefault();
+    volStep(d);
+    stop();
+    hold = setTimeout(() => { rep = setInterval(() => volStep(d), 110); }, 400);
+  });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, stop);
+  b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); volStep(d); } });
+}
+new ResizeObserver(() => drawWheel()).observe(wheel);
 
 $("btnFs").addEventListener("click", () => {
   if (!st.player) return;
@@ -1248,7 +1405,7 @@ function start() {
   applyI18n();
   secret = readKey();
   if (!secret) { $("pairView").hidden = false; setConn("off", "notPaired"); return; }
-  setFill(vol);
+  drawWheel();
   showTab("home");
   render();
   requestAnimationFrame(frame);

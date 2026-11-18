@@ -121,9 +121,35 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #btnFs.on .i-fs-exit { display: block; }
 #btnFs.on { background: var(--signal); color: #fff; }
 .vol { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 24px; }
-.vol-icon { width: 22px; height: 22px; fill: var(--text-2); flex: none; }
-.vol-num { font-size: 12.5px; color: var(--text-2); width: 30px; font-variant-numeric: tabular-nums; }
-.vol input { flex: 1; }
+.vol-icon { width: 16px; height: 16px; fill: var(--text-3); flex: none; }
+.vol-num { font-size: 12.5px; color: var(--text-2); width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Roda de volume: um disco deitado visto de lado (face de cima + borda com ranhuras) */
+.vw-step { border: 0; background: var(--surface); width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex: none; touch-action: manipulation; }
+.vw-step svg { width: 24px; height: 24px; fill: currentColor; }
+.vw-step:active { transform: scale(0.92); background: var(--surface-2); }
+.vw-step:disabled { opacity: 0.35; }
+.vw-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.vwheel { position: relative; height: 60px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; outline: none; }
+.vwheel.drag { cursor: grabbing; }
+.vwheel.off { opacity: 0.35; pointer-events: none; }
+.vw-edge {
+  position: absolute; left: 0; right: 0; top: 13px; bottom: 0; overflow: hidden;
+  border-radius: 0 0 50% 50% / 0 0 13px 13px;
+  background: linear-gradient(to right, #0d0c13, #24212f 18%, #3a3649 50%, #24212f 82%, #0d0c13);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
+}
+.vw-ridges { position: absolute; inset: 0; }
+.vw-ridges i { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; margin-left: -1.5px; background: rgba(0, 0, 0, 0.6); box-shadow: 1px 0 0 rgba(255, 255, 255, 0.07); will-change: transform; }
+.vw-top {
+  position: absolute; left: 0; right: 0; top: 0; height: 26px; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 35%, #45405a, #26232f 75%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+.vwheel.drag .vw-top, .vwheel:focus-visible .vw-top { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 2px var(--signal); }
+.vw-dot { position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--signal-2); box-shadow: 0 0 8px var(--signal-2); will-change: transform; }
+.vw-meta { display: flex; align-items: center; gap: 8px; }
+.vw-level { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.vw-level i { display: block; height: 100%; width: 50%; background: var(--signal-2); border-radius: 2px; }
 
 input[type="range"] {
   -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; margin: 0;
